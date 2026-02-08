@@ -1,0 +1,108 @@
+<section class="relative h-screen w-full overflow-hidden bg-gray-100">
+  <div
+    id="slider"
+    class="flex h-full transition-transform duration-700 ease-in-out"
+  >
+    <div class="min-w-full h-full relative">
+      <img
+        src="https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&q=80&w=2000"
+        class="absolute inset-0 w-full h-full object-cover"
+        alt="Texturas Minimalistas"
+      />
+      <div
+        class="absolute inset-0 bg-black/20 flex flex-col justify-center items-center text-white"
+      >
+        <h2 class="text-[12px] tracking-[0.5em] uppercase mb-4 animate-fade-in">
+          Regalos Personalizados
+        </h2>
+        <p class="text-5xl md:text-7xl font-serif italic tracking-tighter">
+          Detalles Únicos
+        </p>
+      </div>
+    </div>
+
+    <div class="min-w-full h-full relative">
+      <img
+        src="https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&q=80&w=2000"
+        class="absolute inset-0 w-full h-full object-cover"
+        alt="Diseño de Interiores"
+      />
+      <div
+        class="absolute inset-0 bg-black/30 flex flex-col justify-center items-center text-white"
+      >
+        <h2 class="text-[12px] tracking-[0.5em] uppercase mb-4">
+          Más que un regalo
+        </h2>
+        <p class="text-5xl md:text-7xl font-serif italic tracking-tighter">
+          Una experiencia
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <button
+    id="prev"
+    class="absolute left-8 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-all z-10"
+  >
+    <svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+      ><path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="1"
+        d="M15 19l-7-7 7-7"></path></svg
+    >
+  </button>
+  <button
+    id="next"
+    class="absolute right-8 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-all z-10"
+  >
+    <svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+      ><path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="1"
+        d="M9 5l7 7-7 7"></path></svg
+    >
+  </button>
+
+  <div class="absolute bottom-10 left-1/2 -translate-x-1/2 flex space-x-3">
+    <div class="w-2 h-2 rounded-full bg-white cursor-pointer"></div>
+    <div class="w-2 h-2 rounded-full bg-white/40 cursor-pointer"></div>
+  </div>
+</section>
+
+<script>
+  const slider = document.getElementById("slider");
+  const nextBtn = document.getElementById("next");
+  const prevBtn = document.getElementById("prev");
+  let currentIndex = 0;
+
+  function updateSlider() {
+    if (slider) {
+      slider.style.transform = `translateX(-${currentIndex * 100}%)`;
+    }
+  }
+
+  nextBtn?.addEventListener("click", () => {
+    currentIndex = (currentIndex + 1) % 2; // El '2' es el número de slides
+    updateSlider();
+  });
+
+  prevBtn?.addEventListener("click", () => {
+    currentIndex = (currentIndex - 1 + 2) % 2;
+    updateSlider();
+  });
+
+  // Autoplay opcional
+  setInterval(() => {
+    currentIndex = (currentIndex + 1) % 2;
+    updateSlider();
+  }, 5000);
+</script>
+
+<style>
+  .font-serif {
+    font-family: "Playfair Display", serif;
+  }
+</style>
+
