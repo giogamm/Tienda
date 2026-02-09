@@ -12,7 +12,7 @@ import Navbar from "../components/Nav.astro";
     </div>
 
     <div id="cart-container">
-      <div id="cart-items" class="space-y-8"></div>
+      <div id="cart-items" class="space-y-4"></div>
 
       <div id="cart-empty" class="hidden text-center py-20">
         <p class="text-neutral-400 uppercase tracking-widest text-sm mb-8">
@@ -39,12 +39,7 @@ import Navbar from "../components/Nav.astro";
         </div>
 
         <div class="flex flex-col gap-4">
-          <button
-            id="checkout-mercadopago"
-            class="w-full bg-neutral-900 text-white py-5 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-800 transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
-          >
-            Pagar con Mercado Pago
-          </button>
+          <div id="walletBrick_container"></div>
 
           <button
             id="checkout-whatsapp"
@@ -53,126 +48,200 @@ import Navbar from "../components/Nav.astro";
             Finalizar pedido por WhatsApp
           </button>
         </div>
-
         <p
           class="text-center text-[10px] text-neutral-400 mt-6 tracking-wider uppercase"
         >
-          Si necesitas personalización especial, te recomendamos usar el botón
-          de WhatsApp.
+          Los detalles de personalización se enviarán automáticamente por chat.
         </p>
       </div>
     </div>
   </main>
 </Layout>
 
+<script is:inline src="https://sdk.mercadopago.com/js/v2"></script>
+
 <script>
-  const itemsContainer = document.getElementById("cart-items");
-  const emptyMessage = document.getElementById("cart-empty");
-  const summary = document.getElementById("cart-summary");
-  const totalPriceEl = document.getElementById("total-price");
+  const initCart = () => {
+    const itemsContainer = document.getElementById("cart-items");
+    const emptyMessage = document.getElementById("cart-empty");
+    const summary = document.getElementById("cart-summary");
+    const totalPriceEl = document.getElementById("total-price");
 
-  function renderCart() {
-    const cart = JSON.parse(localStorage.getItem("cart") || "[]");
+    // Inicializar MP (Pon tu Public Key real aquí)
+    // @ts-ignore
+    const mp = new window.MercadoPago(import.meta.env.PUBLIC_MP_PUBLIC_KEY, {
+      locale: "es-MX",
+    });
+    const bricksBuilder = mp.bricks();
 
-    if (cart.length === 0) {
-      if (itemsContainer) itemsContainer.innerHTML = "";
-      emptyMessage?.classList.remove("hidden");
-      summary?.classList.add("hidden");
-      return;
-    }
+    async function renderCart() {
+      const cart = JSON.parse(localStorage.getItem("cart") || "[]");
 
-    emptyMessage?.classList.add("hidden");
-    summary?.classList.remove("hidden");
+      if (!itemsContainer || !emptyMessage || !summary || !totalPriceEl) return;
 
-    let total = 0;
-    if (itemsContainer) {
-      itemsContainer.innerHTML = cart
-        .map((item: any, index: number) => {
-          const price = item.precio || item.price || 0;
-          total += price * item.quantity;
+      if (cart.length === 0) {
+        itemsContainer.innerHTML = "";
+        emptyMessage.classList.remove("hidden");
+        summary.classList.add("hidden");
+        return;
+      }
 
-          return `
-          <div class="flex items-center gap-6 py-6 border-b border-neutral-50 last:border-0">
-            <div class="w-24 h-32 bg-neutral-50 overflow-hidden">
-              <img src="${item.imagen}" alt="${item.nombre}" class="w-full h-full object-cover" />
+      emptyMessage.classList.add("hidden");
+      summary.classList.remove("hidden");
+
+      let total = 0;
+      let html = "";
+
+      cart.forEach((item: any, index: number) => {
+        const price = Number(item.precio || item.price || 0);
+        const qty = Number(item.quantity || 1);
+        const subtotal = price * qty;
+        total += subtotal;
+
+        const p = item.personalizacion || {};
+        const tieneFotos =
+          p.fotos && Array.isArray(p.fotos) && p.fotos.length > 0;
+
+        html += `
+          <div class="flex items-start gap-4 py-6 border-b border-neutral-50 last:border-0">
+            <div class="w-20 h-28 bg-neutral-50 flex-shrink-0">
+              <img src="${item.imagen}" class="w-full h-full object-cover" onerror="this.src='/placeholder.jpg'"/>
             </div>
-            
-            <div class="flex-1">
-              <div class="flex justify-between items-start mb-2">
-                <h3 class="text-xs uppercase tracking-widest font-medium text-neutral-900">${item.nombre}</h3>
-                <button onclick="window.removeItem(${index})" class="text-neutral-300 hover:text-red-400 transition-colors">
+            <div class="flex-1 min-w-0">
+              <div class="flex justify-between items-start">
+                <h3 class="text-[11px] uppercase tracking-widest font-bold truncate">${item.nombre}</h3>
+                <button class="remove-item text-neutral-300 hover:text-red-500 p-1 cursor-pointer" data-index="${index}">
                   <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="1.5"/></svg>
                 </button>
               </div>
-              
-              <p class="text-xs text-neutral-400 mb-6">${item.categoria || "Regalo"}</p>
-              
-              <div class="flex justify-between items-center">
+              <div class="mt-2 space-y-2">
+                ${p.texto ? `<div class="bg-neutral-50 p-2 border-l border-neutral-300"><p class="text-[8px] uppercase tracking-widest text-neutral-400 mb-0.5">Grabado:</p><p class="text-[10px] italic text-neutral-600">"${p.texto}"</p></div>` : ""}
+                ${tieneFotos ? `<div class="flex items-center gap-1"><p class="text-[9px] text-neutral-400 uppercase tracking-widest">📷 ${p.fotos.length} fotos seleccionadas</p></div>` : ""}
+              </div>
+              <div class="flex justify-between items-center mt-4">
                 <div class="flex items-center border border-neutral-200">
-                  <button onclick="window.updateQty(${index}, -1)" class="px-3 py-1 text-neutral-400 hover:text-black">-</button>
-                  <span class="px-2 text-xs font-medium w-8 text-center">${item.quantity}</span>
-                  <button onclick="window.updateQty(${index}, 1)" class="px-3 py-1 text-neutral-400 hover:text-black">+</button>
+                  <button class="qty-btn px-2 py-1 text-neutral-400 cursor-pointer" data-index="${index}" data-change="-1">-</button>
+                  <span class="px-2 text-[10px] font-bold">${qty}</span>
+                  <button class="qty-btn px-2 py-1 text-neutral-400 cursor-pointer" data-index="${index}" data-change="1">+</button>
                 </div>
-                <span class="font-serif italic text-neutral-900">$${price * item.quantity}</span>
+                <span class="font-serif italic text-neutral-900">$${subtotal}</span>
               </div>
             </div>
           </div>
         `;
-        })
-        .join("");
-    }
-
-    if (totalPriceEl) totalPriceEl.innerText = `$${total} MXN`;
-  }
-
-  (window as any).removeItem = (index: number) => {
-    let cart = JSON.parse(localStorage.getItem("cart") || "[]");
-    cart.splice(index, 1);
-    localStorage.setItem("cart", JSON.stringify(cart));
-    renderCart();
-    window.dispatchEvent(new Event("cart-updated"));
-  };
-
-  (window as any).updateQty = (index: number, change: number) => {
-    let cart = JSON.parse(localStorage.getItem("cart") || "[]");
-    cart[index].quantity += change;
-    if (cart[index].quantity < 1) cart[index].quantity = 1;
-    localStorage.setItem("cart", JSON.stringify(cart));
-    renderCart();
-    window.dispatchEvent(new Event("cart-updated"));
-  };
-
-  // Botón Mercado Pago (Pendiente implementación API)
-  document
-    .getElementById("checkout-mercadopago")
-    ?.addEventListener("click", () => {
-      console.log("Iniciando flujo de Mercado Pago...");
-      alert(
-        "Mañana configuraremos la API de Mercado Pago para procesar tu pago de forma segura.",
-      );
-    });
-
-  // Lógica del Botón de WhatsApp
-  document
-    .getElementById("checkout-whatsapp")
-    ?.addEventListener("click", () => {
-      const cart = JSON.parse(localStorage.getItem("cart") || "[]");
-      let mensaje =
-        "¡Hola! Me gustaría cotizar un pedido especial de los siguientes productos:\n\n";
-
-      cart.forEach((item: any) => {
-        mensaje += `• ${item.nombre} x${item.quantity} - $${(item.precio || item.price) * item.quantity} MXN\n`;
       });
 
-      const total = totalPriceEl?.innerText;
-      mensaje += `\n*Total: ${total}*\n\nMe gustaría acordar los detalles de personalización.`;
+      itemsContainer.innerHTML = html;
+      totalPriceEl.innerText = `$${total} MXN`;
 
-      const numero = "527551202205";
-      window.open(
-        `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`,
-        "_blank",
-      );
-    });
+      attachEventListeners();
 
-  renderCart();
+      // Lanzamos la creación del botón de Mercado Pago cada vez que el carrito cambia
+      await handleMercadoPagoButton(cart);
+    }
+
+    // --- FUNCIÓN INTEGRADA DE MERCADO PAGO ---
+    async function handleMercadoPagoButton(cart: any[]) {
+      const container = document.getElementById("walletBrick_container");
+      if (!container) return;
+
+      // Limpiamos el contenedor para evitar botones duplicados
+      container.innerHTML = "";
+
+      try {
+        const response = await fetch("/api/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: cart }),
+        });
+
+        const { id } = await response.json();
+
+        if (id) {
+          await bricksBuilder.create("wallet", "walletBrick_container", {
+            initialization: {
+              preferenceId: id,
+              redirectMode: "modal",
+            },
+            customization: {
+              texts: { valueProp: "smart_option" },
+              visual: {
+                buttonBackground: "black",
+                borderRadius: "0px",
+              },
+            },
+          });
+        }
+      } catch (e) {
+        console.error("Error inicializando MP:", e);
+      }
+    }
+
+    function attachEventListeners() {
+      document.querySelectorAll(".qty-btn").forEach((el) => {
+        (el as HTMLElement).onclick = (e) => {
+          const target = e.currentTarget as HTMLElement;
+          const idx = parseInt(target.dataset.index || "0");
+          const change = parseInt(target.dataset.change || "0");
+          updateQty(idx, change);
+        };
+      });
+
+      document.querySelectorAll(".remove-item").forEach((el) => {
+        (el as HTMLElement).onclick = (e) => {
+          const target = e.currentTarget as HTMLElement;
+          const idx = parseInt(target.dataset.index || "0");
+          removeItem(idx);
+        };
+      });
+    }
+
+    function updateQty(index: number, change: number) {
+      let cart = JSON.parse(localStorage.getItem("cart") || "[]");
+      if (cart[index]) {
+        cart[index].quantity = Math.max(
+          1,
+          (cart[index].quantity || 1) + change,
+        );
+        localStorage.setItem("cart", JSON.stringify(cart));
+        renderCart();
+        window.dispatchEvent(new Event("cart-updated"));
+      }
+    }
+
+    function removeItem(index: number) {
+      let cart = JSON.parse(localStorage.getItem("cart") || "[]");
+      cart.splice(index, 1);
+      localStorage.setItem("cart", JSON.stringify(cart));
+      renderCart();
+      window.dispatchEvent(new Event("cart-updated"));
+    }
+
+    const whatsappBtn = document.getElementById("checkout-whatsapp");
+    if (whatsappBtn) {
+      whatsappBtn.onclick = () => {
+        const cart = JSON.parse(localStorage.getItem("cart") || "[]");
+        let msg = "¡Hola! Me gustaría realizar un pedido personalizado:\n\n";
+        cart.forEach((item: any, i: number) => {
+          msg += `*${i + 1}. ${item.nombre}* (x${item.quantity})\n`;
+          if (item.personalizacion?.texto)
+            msg += `   - Grabado: "${item.personalizacion.texto}"\n`;
+          if (item.personalizacion?.fotos?.length > 0)
+            msg += `   - Fotos: ${item.personalizacion.fotos.length} archivo(s)\n`;
+          msg += `   - Precio: $${Number(item.precio || item.price) * item.quantity} MXN\n\n`;
+        });
+        msg += `*TOTAL ESTIMADO: ${totalPriceEl?.innerText}*`;
+        window.open(
+          `https://wa.me/527551202205?text=${encodeURIComponent(msg)}`,
+          "_blank",
+        );
+      };
+    }
+
+    renderCart();
+  };
+
+  // Inicialización para Astro (con y sin View Transitions)
+  initCart();
+  document.addEventListener("astro:after-swap", initCart);
 </script>

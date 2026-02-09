@@ -28,6 +28,7 @@ const products = querySnapshot.docs.map((doc) => ({
               src={product.imagen}
               alt={product.nombre}
               class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              transition:name={product.id}
             />
             <div class="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
 
@@ -42,7 +43,10 @@ const products = querySnapshot.docs.map((doc) => ({
             <p class="text-[10px] uppercase tracking-widest text-gray-400 mb-1">
               {product.categoria || "Material"}
             </p>
-            <h3 class="text-sm font-medium text-gray-900 mb-2">
+            <h3
+              class="text-sm font-medium text-gray-900 mb-2"
+             transition:name={'name-' + product.id}
+            >
               {product.nombre}
             </h3>
             <p class="text-sm font-serif italic text-gray-600">

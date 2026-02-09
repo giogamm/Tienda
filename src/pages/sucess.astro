@@ -1,0 +1,29 @@
+---
+// src/pages/success.astro
+---
+
+<layout>
+  <div
+    class="flex flex-col items-center justify-center min-h-screen bg-[#f4e4bc] p-4 text-center"
+  >
+    <h1 class="text-4xl font-bold text-[#5d4037] mb-4">
+      ¡Mil gracias por tu compra!
+    </h1>
+    <p class="text-lg text-[#795548] mb-8">
+      Tu pedido de Jenndart Pop está siendo preparado con mucho amor.
+    </p>
+    <a
+      href="/"
+      class="bg-[#8d6e63] text-white px-6 py-2 rounded-full hover:bg-[#5d4037] transition"
+    >
+      Volver a la tienda
+    </a>
+  </div>
+</layout>
+
+<script>
+  // Limpiamos el carrito al cargar la página de confirmación
+  localStorage.removeItem("cart");
+  // Avisamos al sistema que el carrito cambió para que el contador de la Nav se actualice
+  window.dispatchEvent(new Event("cart-updated"));
+</script>

@@ -1,0 +1,102 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="Acceso | Jenndart Pop">
+  <main
+    class="h-screen w-full flex items-center justify-center bg-[#FDFBF2] px-4"
+  >
+    <div
+      class="max-w-md w-full bg-white p-10 shadow-sm border border-gray-100 rounded-sm"
+    >
+      <div class="text-center mb-10">
+        <h1 class="text-3xl font-serif italic mb-2">Jenndart Pop</h1>
+        <p
+          class="text-[9px] uppercase tracking-[0.4em] text-gray-400 font-sans"
+        >
+          Panel de Control
+        </p>
+      </div>
+
+      <form id="login-form" class="space-y-6">
+        <input
+          type="email"
+          id="email"
+          placeholder="Email"
+          class="elegant-input"
+          required
+        />
+        <input
+          type="password"
+          id="password"
+          placeholder="Contraseña"
+          class="elegant-input"
+          required
+        />
+
+        <button
+          type="submit"
+          id="login-btn"
+          class="w-full bg-black text-white py-4 text-[10px] uppercase tracking-[0.3em] font-bold hover:bg-neutral-800 transition-all cursor-pointer"
+        >
+          Entrar al Sistema
+        </button>
+
+        <p
+          id="error-msg"
+          class="text-red-400 text-[9px] text-center hidden uppercase tracking-widest mt-4"
+        >
+          Acceso denegado. Revisa tus datos.
+        </p>
+      </form>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  import { auth } from "../lib/firebase";
+  import { signInWithEmailAndPassword } from "firebase/auth";
+
+  const loginForm = document.getElementById("login-form") as HTMLFormElement;
+  const errorMsg = document.getElementById("error-msg");
+  const btn = document.getElementById("login-btn") as HTMLButtonElement;
+
+  loginForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = (document.getElementById("email") as HTMLInputElement).value;
+    const password = (document.getElementById("password") as HTMLInputElement)
+      .value;
+
+    try {
+      btn.innerText = "VERIFICANDO...";
+      btn.disabled = true;
+      await signInWithEmailAndPassword(auth, email, password);
+      // Si entra bien, lo mandamos al admin
+      window.location.href = "/admin";
+    } catch (error) {
+      console.error(error);
+      btn.innerText = "ENTRAR AL SISTEMA";
+      btn.disabled = false;
+      errorMsg?.classList.remove("hidden");
+    }
+  });
+</script>
+
+<style>
+  .elegant-input {
+    width: 100%;
+    background: #fcfcfc;
+    border: 1px solid #eeeeee;
+    padding: 16px;
+    font-size: 14px;
+    outline: none;
+    transition: all 0.3s ease;
+  }
+  .elegant-input:focus {
+    border-color: black;
+    background: white;
+  }
+  .font-serif {
+    font-family: "Playfair Display", serif;
+  }
+</style>

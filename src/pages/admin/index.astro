@@ -1,0 +1,372 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import Navbar from "../../components/Nav.astro";
+---
+
+<Layout title="Admin | Jenndart Pop Control">
+  <Navbar />
+  <main class="max-w-4xl mx-auto px-4 pt-28 pb-32">
+    <div
+      class="flex justify-between items-center mb-10 border-b border-gray-100 pb-6"
+    >
+      <div>
+        <h1 class="text-2xl font-serif italic">Jenndart Pop Admin</h1>
+        <p class="text-[9px] uppercase tracking-[0.3em] text-gray-400">
+          Gestión de Tienda e Inventario
+        </p>
+      </div>
+      <button
+        onclick="document.getElementById('settings-modal').classList.toggle('hidden')"
+        class="bg-gray-50 border border-gray-200 p-2 rounded-full hover:bg-black hover:text-white transition-all cursor-pointer"
+      >
+        <svg
+          class="w-5 h-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+            stroke-width="1.5"></path>
+          <circle cx="12" cy="12" r="3" stroke-width="1.5"></circle>
+        </svg>
+      </button>
+    </div>
+
+    <div id="settings-modal" class="hidden mb-12 animate-fade-in space-y-8">
+      <div class="bg-gray-50 p-6 rounded-lg border border-gray-100">
+        <h3 class="text-[10px] uppercase font-bold tracking-widest mb-4 italic">
+          Categorías Disponibles
+        </h3>
+        <div class="flex gap-2 mb-4">
+          <input
+            type="text"
+            id="new-cat-name"
+            class="elegant-input bg-white"
+            placeholder="Nueva categoría..."
+          />
+          <button
+            id="add-cat-btn"
+            class="bg-black text-white px-6 py-2 hover:bg-gray-800 transition-colors"
+            >＋</button
+          >
+        </div>
+        <div id="cats-list" class="flex flex-wrap gap-2"></div>
+      </div>
+    </div>
+
+    <section class="mb-16">
+      <details
+        class="group bg-white border border-gray-100 shadow-sm rounded-sm overflow-hidden"
+      >
+        <summary
+          class="list-none p-6 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition-colors"
+        >
+          <span
+            class="text-[11px] uppercase tracking-[0.3em] font-bold text-black"
+            >Añadir Nuevo Producto</span
+          >
+          <span class="text-gray-300 group-open:rotate-180 transition-transform"
+            >↓</span
+          >
+        </summary>
+        <form
+          id="product-form"
+          class="p-8 space-y-6 border-t border-gray-50 bg-white"
+        >
+          <input
+            type="text"
+            id="name"
+            class="elegant-input"
+            placeholder="Nombre del producto"
+            required
+          />
+          <div class="grid grid-cols-2 gap-4">
+            <input
+              type="number"
+              id="price"
+              class="elegant-input"
+              placeholder="Precio $"
+              required
+            />
+            <select id="category-select" class="elegant-input" required>
+              <option value="">Categoría...</option>
+            </select>
+          </div>
+          <input
+            type="text"
+            id="image"
+            class="elegant-input"
+            placeholder="URL de la imagen"
+            required
+          />
+          <textarea
+            id="description"
+            class="elegant-input"
+            placeholder="Descripción breve..."></textarea>
+
+          <div class="flex flex-col gap-4 p-4 border border-gray-50 rounded">
+            <label
+              class="flex justify-between items-center text-[10px] tracking-widest uppercase cursor-pointer"
+            >
+              Permitir Texto Grabado
+              <input
+                type="checkbox"
+                id="permiteTexto"
+                class="w-5 h-5 accent-black"
+                checked
+              />
+            </label>
+            <label
+              class="flex justify-between items-center text-[10px] tracking-widest uppercase font-bold text-orange-500 cursor-pointer"
+            >
+              Destacar en Inicio (Top)
+              <input type="checkbox" id="isTop" class="w-5 h-5 accent-black" />
+            </label>
+          </div>
+
+          <div
+            class="flex items-center justify-between p-4 border border-gray-50"
+          >
+            <span
+              class="text-[10px] uppercase tracking-widest text-gray-400 font-bold"
+              >Límite de Fotos:</span
+            >
+            <div class="flex items-center gap-4">
+              <button
+                type="button"
+                id="minus-photos"
+                class="w-8 h-8 rounded-full border border-gray-200 hover:bg-gray-50"
+                >-</button
+              >
+              <input
+                type="number"
+                id="maxFotos"
+                value="0"
+                class="w-8 text-center font-bold bg-transparent"
+                readonly
+              />
+              <button
+                type="button"
+                id="plus-photos"
+                class="w-8 h-8 rounded-full border border-gray-200 hover:bg-gray-50"
+                >+</button
+              >
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            id="submit-btn"
+            class="w-full bg-black text-white py-5 text-[10px] uppercase tracking-[0.3em] font-bold hover:bg-gray-800 transition-all cursor-pointer"
+          >
+            Publicar Producto
+          </button>
+        </form>
+      </details>
+    </section>
+
+    <section>
+      <div class="flex items-center gap-4 mb-8">
+        <h2 class="text-[11px] uppercase tracking-[0.3em] font-bold text-black">
+          Inventario Actual (A-Z)
+        </h2>
+        <div class="h-1px flex-1 bg-gray-100"></div>
+      </div>
+      <div id="products-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      </div>
+    </section>
+  </main>
+</Layout>
+
+<style is:global>
+  :root {
+    --border: #eeeeee;
+    --bg-light: #f9f9f9;
+  }
+  .elegant-input {
+    width: 100%;
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    padding: 14px;
+    font-size: 14px;
+    outline: none;
+    border-radius: 4px;
+  }
+  .elegant-input:focus {
+    border-color: black;
+    background: white;
+  }
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .h-1px {
+    height: 1px;
+  }
+</style>
+
+<script>
+  import { db } from "../../lib/firebase";
+  import {
+    collection,
+    addDoc,
+    deleteDoc,
+    doc,
+    onSnapshot,
+    query,
+    orderBy,
+    serverTimestamp,
+    updateDoc,
+    arrayUnion,
+    arrayRemove,
+  } from "firebase/firestore";
+
+  import { auth } from "../../lib/firebase";
+  import { onAuthStateChanged, signOut } from "firebase/auth";
+
+  // EL PORTERO: Revisa si hay sesión activa
+  onAuthStateChanged(auth, (user) => {
+    if (!user) {
+      // Si no hay nadie, patada hacia el login
+      window.location.href = "/login";
+    }
+  });
+
+  // OPCIONAL: Botón de Cerrar Sesión
+  // Si quieres añadir un botón de "Salir" en tu HTML, usa esto:
+  (window as any).logout = async () => {
+    await signOut(auth);
+    window.location.href = "/login";
+  };
+  
+  const initAdmin = () => {
+    const listContainer = document.getElementById("products-list");
+    const catSelect = document.getElementById(
+      "category-select",
+    ) as HTMLSelectElement;
+    const catsList = document.getElementById("cats-list");
+    const productForm = document.getElementById(
+      "product-form",
+    ) as HTMLFormElement;
+
+    // --- CARGAR CATEGORÍAS ---
+    onSnapshot(doc(db, "configuracion", "tienda"), (docSnap) => {
+      if (!docSnap.exists()) return;
+      const categorias = docSnap.data().categorias || [];
+      if (catSelect)
+        catSelect.innerHTML =
+          '<option value="">Categoría...</option>' +
+          categorias
+            .map((c: string) => `<option value="${c}">${c}</option>`)
+            .join("");
+
+      if (catsList)
+        catsList.innerHTML = categorias
+          .map(
+            (c: string) => `
+          <span class="bg-white border border-gray-100 px-3 py-1 rounded-full text-[9px] uppercase flex items-center gap-2 shadow-sm">
+            ${c} <button onclick="window.removeCat('${c}')" class="text-red-300 hover:text-red-500">×</button>
+          </span>`,
+          )
+          .join("");
+    });
+
+    // --- CARGAR PRODUCTOS ---
+    onSnapshot(
+      query(collection(db, "productos"), orderBy("nombre", "asc")),
+      (snapshot) => {
+        if (listContainer)
+          listContainer.innerHTML = snapshot.docs
+            .map((docSnap) => {
+              const p = docSnap.data();
+              return `
+            <div class="bg-white border border-gray-100 p-4 flex gap-4 items-center relative shadow-sm rounded-sm">
+              <img src="${p.imagen}" class="w-16 h-20 object-cover bg-gray-50" />
+              <div class="flex-1 min-w-0">
+                <h3 class="text-[10px] font-bold uppercase tracking-widest truncate pr-6">${p.nombre}</h3>
+                <p class="text-sm font-serif italic text-black mt-1">$${p.precio}</p>
+                <p class="text-[8px] text-gray-400 uppercase tracking-widest">${p.categoria}</p>
+              </div>
+              <button onclick="window.deleteProduct('${docSnap.id}')" class="absolute top-2 right-2 text-gray-200 hover:text-red-500 p-2 transition-colors">×</button>
+            </div>`;
+            })
+            .join("");
+      },
+    );
+
+    // --- ACCIONES ---
+    const addCatBtn = document.getElementById("add-cat-btn");
+    if (addCatBtn)
+      addCatBtn.onclick = async () => {
+        const input = document.getElementById(
+          "new-cat-name",
+        ) as HTMLInputElement;
+        if (input.value)
+          await updateDoc(doc(db, "configuracion", "tienda"), {
+            categorias: arrayUnion(input.value),
+          });
+        input.value = "";
+      };
+
+    const plusBtn = document.getElementById("plus-photos");
+    const minusBtn = document.getElementById("minus-photos");
+    const maxInput = document.getElementById("maxFotos") as HTMLInputElement;
+    if (plusBtn)
+      plusBtn.onclick = () =>
+        (maxInput.value = (parseInt(maxInput.value) + 1).toString());
+    if (minusBtn)
+      minusBtn.onclick = () =>
+        (maxInput.value = Math.max(0, parseInt(maxInput.value) - 1).toString());
+
+    if (productForm)
+      productForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById("submit-btn") as HTMLButtonElement;
+        btn.innerText = "PROCESANDO...";
+        await addDoc(collection(db, "productos"), {
+          nombre: (document.getElementById("name") as HTMLInputElement).value,
+          precio: Number(
+            (document.getElementById("price") as HTMLInputElement).value,
+          ),
+          categoria: catSelect.value,
+          imagen: (document.getElementById("image") as HTMLInputElement).value,
+          description: (
+            document.getElementById("description") as HTMLTextAreaElement
+          ).value,
+          permiteTexto: (
+            document.getElementById("permiteTexto") as HTMLInputElement
+          ).checked,
+          isTop: (document.getElementById("isTop") as HTMLInputElement).checked,
+          maxFotos: Number(maxInput.value),
+          createdAt: serverTimestamp(),
+        });
+        productForm.reset();
+        maxInput.value = "0";
+        btn.innerText = "Publicar Producto";
+      };
+  };
+
+  // GLOBALES
+  (window as any).removeCat = async (cat: string) => {
+    if (confirm("¿Borrar categoría?"))
+      await updateDoc(doc(db, "configuracion", "tienda"), {
+        categorias: arrayRemove(cat),
+      });
+  };
+  (window as any).deleteProduct = async (id: string) => {
+    if (confirm("¿Borrar producto?")) await deleteDoc(doc(db, "productos", id));
+  };
+
+  initAdmin();
+  document.addEventListener("astro:after-swap", initAdmin);
+</script>

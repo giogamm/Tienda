@@ -5,7 +5,6 @@ import { db } from "../../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
 const { id } = Astro.params;
-
 if (!id) return Astro.redirect("/404");
 
 const docRef = doc(db, "productos", id);
@@ -14,6 +13,10 @@ const docSnap = await getDoc(docRef);
 if (!docSnap.exists()) return Astro.redirect("/404");
 
 const product = { id: docSnap.id, ...(docSnap.data() as any) };
+
+// Definimos valores por defecto por si no los pusiste en Firebase
+const permiteTexto = product.permiteTexto ?? true;
+const maxFotos = product.maxFotos ?? 0;
 ---
 
 <Layout title={`${product.nombre} | Tienda`}>
@@ -25,6 +28,7 @@ const product = { id: docSnap.id, ...(docSnap.data() as any) };
           src={product.imagen}
           alt={product.nombre}
           class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+          transition:name={product.id}
         />
       </div>
 
@@ -32,7 +36,10 @@ const product = { id: docSnap.id, ...(docSnap.data() as any) };
         <p class="text-[10px] uppercase tracking-[0.4em] text-gray-400 mb-4">
           {product.categoria || "Personalizado"}
         </p>
-        <h1 class="text-4xl font-serif italic mb-6 text-black">
+        <h1
+          class="text-4xl font-serif italic mb-6 text-black"
+          transition:name={"name-" + product.id}
+        >
           {product.nombre}
         </h1>
         <p class="text-2xl mb-8 font-light">
@@ -45,6 +52,44 @@ const product = { id: docSnap.id, ...(docSnap.data() as any) };
           {product.descripcion}
         </div>
 
+        <div class="space-y-6 mb-10">
+          {
+            permiteTexto && (
+              <div>
+                <label class="text-[10px] uppercase tracking-[0.2em] text-neutral-400 block mb-3">
+                  Texto para grabado / dedicatoria
+                </label>
+                <textarea
+                  id="custom-text"
+                  rows="2"
+                  class="w-full bg-neutral-50 border border-neutral-100 px-4 py-3 text-sm focus:outline-none focus:border-neutral-300 transition-colors font-light"
+                  placeholder="Escribe aquí tu mensaje..."
+                />
+              </div>
+            )
+          }
+
+          {
+            maxFotos > 0 && (
+              <div>
+                <label class="text-[10px] uppercase tracking-[0.2em] text-neutral-400 block mb-3">
+                  Subir fotografías (Máx. {maxFotos})
+                </label>
+                <input
+                  type="file"
+                  id="custom-photos"
+                  multiple
+                  accept="image/*"
+                  class="text-xs text-neutral-500 file:mr-4 file:py-2 file:px-4 file:border-0 file:text-[10px] file:uppercase file:tracking-widest file:bg-neutral-100 file:text-neutral-700 hover:file:bg-neutral-200 cursor-pointer"
+                />
+                <p class="mt-2 text-[9px] text-neutral-400 uppercase tracking-tighter">
+                  Formatos: JPG, PNG. Máximo {maxFotos} archivos.
+                </p>
+              </div>
+            )
+          }
+        </div>
+
         <div class="flex flex-col space-y-4">
           <button
             id="add-to-cart"
@@ -53,11 +98,10 @@ const product = { id: docSnap.id, ...(docSnap.data() as any) };
           >
             Añadir al carrito
           </button>
-
           <button
             id="buy-now"
             data-product={JSON.stringify(product)}
-            class="border border-black[] text-black w-full py-5 text-[11px] uppercase tracking-[0.3em] hover:bg-black/85 hover:text-white transition-all duration-300 active:scale-[0.98]"
+            class="border border-black text-black w-full py-5 text-[11px] uppercase tracking-[0.3em] hover:bg-black/85 hover:text-white transition-all duration-300 active:scale-[0.98]"
           >
             Comprar ahora
           </button>
@@ -66,42 +110,87 @@ const product = { id: docSnap.id, ...(docSnap.data() as any) };
     </div>
   </main>
 </Layout>
-
 <script>
-  // Lógica reutilizable para guardar en el carrito
-  const addToCart = (productData: any) => {
-    let cart = JSON.parse(localStorage.getItem("cart") || "[]");
-    const index = cart.findIndex((item: any) => item.id === productData.id);
+  const addToCart = (productData: any, isRedirect: boolean) => {
+    const textInput = document.getElementById(
+      "custom-text",
+    ) as HTMLTextAreaElement;
+    const photoInput = document.getElementById(
+      "custom-photos",
+    ) as HTMLInputElement;
 
-    if (index > -1) {
-      cart[index].quantity += 1;
-    } else {
-      cart.push({ ...productData, quantity: 1 });
+    // 1. Obtenemos la personalización
+    const personalization = {
+      texto: textInput ? textInput.value.trim() : "",
+      fotos: photoInput?.files
+        ? Array.from(photoInput.files).map((f) => f.name)
+        : [],
+    };
+
+    // 2. Generamos el cartId único
+    // Importante: usamos el ID del producto + el texto para diferenciar
+    const cartId = `${productData.id}-${personalization.texto}`;
+
+    // 3. Cargamos el carrito
+    let cart = [];
+    try {
+      cart = JSON.parse(localStorage.getItem("cart") || "[]");
+    } catch (e) {
+      cart = []; // Si el storage está corrupto, empezamos de cero
     }
 
-    localStorage.setItem("cart", JSON.stringify(cart));
+    // 4. LÓGICA DE AÑADIDO (Corregida)
+    // Buscamos si ya existe EXACTAMENTE el mismo cartId
+    const existingIndex = cart.findIndex((item: any) => item.cartId === cartId);
 
-    // Disparamos el evento para que el Navbar se actualice
+    if (existingIndex > -1) {
+      // Si el producto con ESE texto ya existe, solo subimos cantidad
+      cart[existingIndex].quantity = (cart[existingIndex].quantity || 0) + 1;
+    } else {
+      // Si el texto es diferente (o es otro producto), se añade como NUEVO
+      const newItem = {
+        ...productData,
+        cartId: cartId, // Le asignamos su ID único
+        personalizacion: personalization,
+        quantity: 1,
+      };
+      cart.push(newItem);
+    }
+
+    // 5. Guardamos y avisamos
+    localStorage.setItem("cart", JSON.stringify(cart));
     window.dispatchEvent(new Event("cart-updated"));
+
+    if (isRedirect) {
+      window.location.href = "/carrito";
+    }
   };
 
-  // Configurar botón "Añadir al carrito"
-  const btnAdd = document.getElementById("add-to-cart");
-  btnAdd?.addEventListener("click", () => {
-    const data = JSON.parse(btnAdd.getAttribute("data-product") || "{}");
-    addToCart(data);
+  // --- RECONEXIÓN DE BOTONES ---
+  const initButtons = () => {
+    const btnAdd = document.getElementById("add-to-cart");
+    const btnBuy = document.getElementById("buy-now");
 
-    // Opcional: Cambiar texto del botón temporalmente
-    const originalText = btnAdd.innerText;
-    btnAdd.innerText = "¡AÑADIDO!";
-    setTimeout(() => (btnAdd.innerText = originalText), 2000);
-  });
+    if (btnAdd) {
+      btnAdd.onclick = () => {
+        const data = JSON.parse(btnAdd.getAttribute("data-product") || "{}");
+        addToCart(data, false);
+        const original = btnAdd.innerText;
+        btnAdd.innerText = "¡AÑADIDO!";
+        setTimeout(() => (btnAdd.innerText = original), 2000);
+      };
+    }
 
-  // Configurar botón "Comprar ahora"
-  const btnBuy = document.getElementById("buy-now");
-  btnBuy?.addEventListener("click", () => {
-    const data = JSON.parse(btnBuy.getAttribute("data-product") || "{}");
-    addToCart(data);
-    window.location.href = "/carrito"; // Redirección inmediata
-  });
+    if (btnBuy) {
+      btnBuy.onclick = () => {
+        const data = JSON.parse(btnBuy.getAttribute("data-product") || "{}");
+        addToCart(data, true);
+      };
+    }
+  };
+
+  // Inicializar
+  initButtons();
+  // Para que funcione con View Transitions al navegar
+  document.addEventListener("astro:after-swap", initButtons);
 </script>

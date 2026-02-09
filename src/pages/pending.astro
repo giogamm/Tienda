@@ -1,0 +1,72 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navbar from "../components/Nav.astro";
+---
+
+<Layout title="Pago Pendiente | Jenndart Pop">
+  <Navbar />
+  <main class="max-w-2xl mx-auto px-4 pt-40 pb-20 text-center">
+    <div class="space-y-6">
+      <div class="flex justify-center mb-8">
+        <div
+          class="w-16 h-16 border border-neutral-200 rounded-full flex items-center justify-center"
+        >
+          <svg
+            class="w-8 h-8 text-neutral-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+        </div>
+      </div>
+
+      <h1 class="text-3xl font-serif italic text-neutral-900">
+        Tu pedido está en espera
+      </h1>
+
+      <div class="w-12 h-px bg-neutral-300 mx-auto my-6"></div>
+
+      <p
+        class="text-neutral-500 text-sm tracking-widest uppercase leading-relaxed"
+      >
+        Estamos esperando la confirmación de tu pago.
+      </p>
+
+      <div class="bg-neutral-50 p-8 border border-neutral-100 space-y-4 my-10">
+        <p
+          class="text-[11px] text-neutral-600 leading-relaxed uppercase tracking-wider"
+        >
+          Si elegiste pagar en <span class="font-bold">OXXO</span> o <span
+            class="font-bold">SPEI</span
+          >, recuerda que el pago puede tardar hasta 24 horas en acreditarse.
+        </p>
+        <p class="text-[10px] text-neutral-400 italic">
+          Te enviaremos un correo en cuanto tu pago sea aprobado para comenzar
+          con la personalización.
+        </p>
+      </div>
+
+      <div class="pt-8">
+        <a
+          href="/"
+          class="inline-block text-[11px] uppercase tracking-[0.3em] bg-neutral-900 text-white px-10 py-4 hover:bg-neutral-800 transition-all"
+        >
+          Volver a la tienda
+        </a>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  // Limpiamos el carrito al cargar la página de confirmación
+  localStorage.removeItem("cart");
+  // Avisamos al sistema que el carrito cambió para que el contador de la Nav se actualice
+  window.dispatchEvent(new Event("cart-updated"));
+</script>
