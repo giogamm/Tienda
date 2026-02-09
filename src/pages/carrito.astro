@@ -39,7 +39,14 @@ import Navbar from "../components/Nav.astro";
         </div>
 
         <div class="flex flex-col gap-4">
-          <div id="walletBrick_container"></div>
+          <div
+            id="walletBrick_container"
+            class="min-h-60px flex items-center justify-center bg-neutral-50 animate-pulse border border-neutral-100 transition-all duration-300"
+          >
+            <span class="text-[9px] uppercase tracking-widest text-neutral-400"
+              >Preparando pago seguro...</span
+            >
+          </div>
 
           <button
             id="checkout-whatsapp"
@@ -67,7 +74,6 @@ import Navbar from "../components/Nav.astro";
     const summary = document.getElementById("cart-summary");
     const totalPriceEl = document.getElementById("total-price");
 
-    // Inicializar MP (Pon tu Public Key real aquí)
     // @ts-ignore
     const mp = new window.MercadoPago(import.meta.env.PUBLIC_MP_PUBLIC_KEY, {
       locale: "es-MX",
@@ -135,18 +141,12 @@ import Navbar from "../components/Nav.astro";
       totalPriceEl.innerText = `$${total} MXN`;
 
       attachEventListeners();
-
-      // Lanzamos la creación del botón de Mercado Pago cada vez que el carrito cambia
       await handleMercadoPagoButton(cart);
     }
 
-    // --- FUNCIÓN INTEGRADA DE MERCADO PAGO ---
     async function handleMercadoPagoButton(cart: any[]) {
       const container = document.getElementById("walletBrick_container");
       if (!container) return;
-
-      // Limpiamos el contenedor para evitar botones duplicados
-      container.innerHTML = "";
 
       try {
         const response = await fetch("/api/checkout", {
@@ -162,6 +162,20 @@ import Navbar from "../components/Nav.astro";
             initialization: {
               preferenceId: id,
               redirectMode: "modal",
+            },
+            callbacks: {
+              onReady: () => {
+                // Quitamos el skeleton cuando el botón está listo
+                container.classList.remove(
+                  "animate-pulse",
+                  "bg-neutral-50",
+                  "min-h-[60px]",
+                );
+                container.classList.add("min-h-0");
+                const text = container.querySelector("span");
+                if (text) text.remove();
+              },
+              onError: (error) => console.error(error),
             },
             customization: {
               texts: { valueProp: "smart_option" },
@@ -241,7 +255,6 @@ import Navbar from "../components/Nav.astro";
     renderCart();
   };
 
-  // Inicialización para Astro (con y sin View Transitions)
   initCart();
   document.addEventListener("astro:after-swap", initCart);
 </script>
