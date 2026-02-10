@@ -45,12 +45,10 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
             class="w-full min-h-50px overflow-hidden"
           >
           </div>
-
           <div id="walletBrick_container" class="w-full min-h-50px"></div>
-
           <button
             id="checkout-whatsapp"
-            class="w-full border border-neutral-900 text-neutral-900 py-4 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-50 transition-all cursor-pointer active:scale-95"
+            class="w-full border border-neutral-900 text-neutral-900 py-4 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-50 transition-all cursor-pointer"
           >
             Finalizar por WhatsApp
           </button>
@@ -66,7 +64,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
 
 <script>
   let walletBrickController: any = null;
-  let debounceTimer: any = null; // Temporizador para evitar errores por clics rápidos
+  let isProcessing = false; // Estado de bloqueo
 
   const initCart = () => {
     const itemsContainer = document.getElementById("cart-items");
@@ -93,18 +91,18 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         const qty = Number(item.quantity || 1);
         total += price * qty;
         return `
-        <div class="flex items-start gap-4 py-8 border-b border-neutral-50 last:border-0">
+        <div class="flex items-start gap-4 py-8 border-b border-neutral-50 last:border-0 transition-opacity duration-300 ${isProcessing ? "opacity-50 pointer-events-none" : ""}">
           <img src="${item.imagen}" class="w-24 h-32 object-cover bg-neutral-50" />
           <div class="flex-1">
             <div class="flex justify-between items-start">
               <h3 class="text-[11px] uppercase font-bold tracking-widest">${item.nombre}</h3>
-              <button class="remove-item text-neutral-300 hover:text-red-500 text-[9px] uppercase tracking-tighter" data-index="${index}">Eliminar</button>
+              <button class="remove-item text-neutral-300 hover:text-red-500 text-[9px] uppercase tracking-tighter disabled:cursor-not-allowed" data-index="${index}" ${isProcessing ? "disabled" : ""}>Eliminar</button>
             </div>
             <div class="flex justify-between items-end mt-10">
               <div class="flex items-center border border-neutral-200">
-                <button class="qty-btn px-3 py-1" data-index="${index}" data-change="-1">-</button>
+                <button class="qty-btn px-3 py-1 disabled:opacity-30" data-index="${index}" data-change="-1" ${isProcessing ? "disabled" : ""}>-</button>
                 <span class="px-2 text-[10px] font-bold w-6 text-center">${qty}</span>
-                <button class="qty-btn px-3 py-1" data-index="${index}" data-change="1">+</button>
+                <button class="qty-btn px-3 py-1 disabled:opacity-30" data-index="${index}" data-change="1" ${isProcessing ? "disabled" : ""}>+</button>
               </div>
               <span class="font-serif italic text-neutral-900">$${price * qty}</span>
             </div>
@@ -122,9 +120,9 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       if (ppCont) ppCont.innerHTML = "";
       if (mpCont)
         mpCont.innerHTML =
-          '<div class="animate-pulse bg-neutral-50 h-12 w-full flex items-center justify-center"><span class="text-[9px] uppercase tracking-widest text-neutral-400">Actualizando...</span></div>';
+          '<div class="animate-pulse bg-neutral-50 h-12 w-full flex items-center justify-center"><span class="text-[9px] text-neutral-400">Actualizando...</span></div>';
 
-      // 1. PAYPAL (Sincrónico)
+      // 1. PAYPAL
       // @ts-ignore
       if (window.paypal) {
         // @ts-ignore
@@ -161,42 +159,43 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
           .render("#paypal-button-container");
       }
 
-      // 2. MERCADO PAGO (Con Debounce de 500ms)
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(async () => {
-        try {
-          if (walletBrickController) {
-            await walletBrickController.unmount();
-            walletBrickController = null;
-          }
-
-          // @ts-ignore
-          const mp = new window.MercadoPago(
-            import.meta.env.PUBLIC_MP_PUBLIC_KEY,
-            { locale: "es-MX" },
-          );
-          const res = await fetch("/api/checkout", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ items: cart }),
-          });
-          const { id } = await res.json();
-
-          if (id && mpCont) {
-            mpCont.innerHTML = "";
-            walletBrickController = await mp
-              .bricks()
-              .create("wallet", "walletBrick_container", {
-                initialization: { preferenceId: id, redirectMode: "modal" },
-                customization: {
-                  visual: { buttonBackground: "black", borderRadius: "0" },
-                },
-              });
-          }
-        } catch (e) {
-          console.error("Error MP:", e);
+      // 2. MERCADO PAGO
+      try {
+        if (walletBrickController) {
+          await walletBrickController.unmount();
+          walletBrickController = null;
         }
-      }, 500); // Espera a que el usuario deje de picar botones
+
+        // @ts-ignore
+        const mp = new window.MercadoPago(
+          import.meta.env.PUBLIC_MP_PUBLIC_KEY,
+          { locale: "es-MX" },
+        );
+        const res = await fetch("/api/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: cart }),
+        });
+        const { id } = await res.json();
+
+        if (id && mpCont) {
+          mpCont.innerHTML = "";
+          walletBrickController = await mp
+            .bricks()
+            .create("wallet", "walletBrick_container", {
+              initialization: { preferenceId: id, redirectMode: "modal" },
+              customization: {
+                visual: { buttonBackground: "black", borderRadius: "0" },
+              },
+            });
+        }
+      } catch (e) {
+        console.error("Error MP:", e);
+      }
+
+      // LIBERAR BLOQUEO
+      isProcessing = false;
+      initCart(); // Re-renderizamos para quitar las clases de bloqueo
     };
 
     const clientId = document.getElementById("paypal-id-bridge")?.dataset.id;
@@ -212,28 +211,41 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       script.onload = refreshPayments;
       document.head.appendChild(script);
     } else {
-      refreshPayments();
+      if (!isProcessing) {
+        // Si no estamos cargando el script por primera vez, no bloqueamos aquí,
+        // el bloqueo ocurre en los eventos de clic abajo.
+      }
     }
 
-    // EVENTOS
+    // EVENTOS CON BLOQUEO
     document.querySelectorAll(".qty-btn").forEach((btn) => {
       (btn as HTMLElement).onclick = (e) => {
+        if (isProcessing) return; // Evita doble clic
+        isProcessing = true; // Bloquea todo
+
         const idx = parseInt((e.currentTarget as HTMLElement).dataset.index!);
         const change = parseInt(
           (e.currentTarget as HTMLElement).dataset.change!,
         );
         cart[idx].quantity = Math.max(1, (cart[idx].quantity || 1) + change);
         localStorage.setItem("cart", JSON.stringify(cart));
-        initCart();
+
+        initCart(); // Renderiza visualmente el bloqueo
+        refreshPayments(); // Actualiza pasarelas
       };
     });
 
     document.querySelectorAll(".remove-item").forEach((btn) => {
       (btn as HTMLElement).onclick = (e) => {
+        if (isProcessing) return;
+        isProcessing = true;
+
         const idx = parseInt((e.currentTarget as HTMLElement).dataset.index!);
         cart.splice(idx, 1);
         localStorage.setItem("cart", JSON.stringify(cart));
+
         initCart();
+        refreshPayments();
       };
     });
   };
