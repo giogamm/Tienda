@@ -69,13 +69,16 @@ import Navbar from "../components/Nav.astro";
 
 <script>
   const initCart = () => {
+    // Definimos tipos para que TypeScript no se queje
+    let walletBrickController: any = null;
+    let mpTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    // Elementos del DOM con su tipo correcto
     const itemsContainer = document.getElementById("cart-items");
     const emptyMessage = document.getElementById("cart-empty");
     const summary = document.getElementById("cart-summary");
     const totalPriceEl = document.getElementById("total-price");
-
-    let walletBrickController: any = null;
-    let isProcessingMP = false; // El cerrojo
+    const mpContainer = document.getElementById("walletBrick_container");
 
     // @ts-ignore
     const mp = new window.MercadoPago(import.meta.env.PUBLIC_MP_PUBLIC_KEY, {
@@ -83,16 +86,58 @@ import Navbar from "../components/Nav.astro";
     });
     const bricksBuilder = mp.bricks();
 
-    async function renderCart() {
+    async function handleMercadoPagoButton(cart: any[]) {
+      if (!mpContainer || cart.length === 0) return;
+
+      if (walletBrickController) {
+        await walletBrickController.unmount();
+        walletBrickController = null;
+      }
+
+      mpContainer.innerHTML =
+        '<span class="text-[9px] uppercase tracking-widest text-neutral-400 italic">Generando botón de pago...</span>';
+      mpContainer.classList.add("animate-pulse", "bg-neutral-50");
+
+      try {
+        const response = await fetch("/api/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: cart }),
+        });
+
+        const { id } = await response.json();
+        if (!id) throw new Error("No ID");
+
+        walletBrickController = await bricksBuilder.create(
+          "wallet",
+          "walletBrick_container",
+          {
+            initialization: { preferenceId: id, redirectMode: "modal" },
+            callbacks: {
+              onReady: () => {
+                mpContainer.classList.remove("animate-pulse", "bg-neutral-50");
+                const text = mpContainer.querySelector("span");
+                if (text) text.remove();
+              },
+              onError: (e: any) => console.error("Error MP:", e),
+            },
+            customization: {
+              visual: { buttonBackground: "black", borderRadius: "0px" },
+            },
+          },
+        );
+      } catch (e: any) {
+        console.error("Fallo al cargar botón:", e);
+        mpContainer.innerHTML =
+          '<button onclick="location.reload()" class="text-[9px] uppercase underline text-red-500">Error al cargar pago. Reintentar.</button>';
+      }
+    }
+
+    function renderCart() {
       const cart = JSON.parse(localStorage.getItem("cart") || "[]");
       if (!itemsContainer || !emptyMessage || !summary || !totalPriceEl) return;
 
       if (cart.length === 0) {
-        // Si el carrito se vacía, matamos cualquier rastro de MP
-        if (walletBrickController) {
-          walletBrickController.unmount();
-          walletBrickController = null;
-        }
         itemsContainer.innerHTML = "";
         emptyMessage.classList.remove("hidden");
         summary.classList.add("hidden");
@@ -112,22 +157,22 @@ import Navbar from "../components/Nav.astro";
         total += subtotal;
 
         html += `
-          <div class="flex items-start gap-4 py-6 border-b border-neutral-50 last:border-0 transition-opacity duration-200">
+          <div class="flex items-start gap-4 py-6 border-b border-neutral-50 last:border-0">
             <div class="w-20 h-28 bg-neutral-50 flex-shrink-0">
               <img src="${item.imagen}" class="w-full h-full object-cover" onerror="this.src='/placeholder.jpg'"/>
             </div>
-            <div class="flex-1 min-w-0">
+            <div class="flex-1">
               <div class="flex justify-between items-start">
-                <h3 class="text-[11px] uppercase tracking-widest font-bold truncate">${item.nombre}</h3>
-                <button class="remove-item text-neutral-300 hover:text-red-500 p-1 cursor-pointer" data-index="${index}">
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="1.5"/></svg>
+                <h3 class="text-[11px] uppercase tracking-widest font-bold">${item.nombre}</h3>
+                <button class="remove-item text-neutral-300 hover:text-red-500 text-[9px] uppercase tracking-tighter" data-index="${index}">
+                   Eliminar
                 </button>
               </div>
               <div class="flex justify-between items-center mt-4">
                 <div class="flex items-center border border-neutral-200">
-                  <button class="qty-btn px-2 py-1 text-neutral-400 cursor-pointer" data-index="${index}" data-change="-1">-</button>
+                  <button class="qty-btn px-2 py-1" data-index="${index}" data-change="-1">-</button>
                   <span class="px-2 text-[10px] font-bold">${qty}</span>
-                  <button class="qty-btn px-2 py-1 text-neutral-400 cursor-pointer" data-index="${index}" data-change="1">+</button>
+                  <button class="qty-btn px-2 py-1" data-index="${index}" data-change="1">+</button>
                 </div>
                 <span class="font-serif italic text-neutral-900">$${subtotal}</span>
               </div>
@@ -137,106 +182,31 @@ import Navbar from "../components/Nav.astro";
 
       itemsContainer.innerHTML = html;
       totalPriceEl.innerText = `$${total} MXN`;
-      attachEventListeners();
 
-      // Solo disparamos MP si no hay una actualización en curso
-      handleMercadoPagoButton(cart);
-    }
-
-    async function handleMercadoPagoButton(cart: any[]) {
-      const container = document.getElementById("walletBrick_container");
-      if (!container || cart.length === 0) return;
-
-      // Si ya está trabajando, esperamos.
-      if (isProcessingMP) return;
-      isProcessingMP = true;
-
-      // Limpieza profunda del controlador anterior
-      if (walletBrickController) {
-        try {
-          await walletBrickController.unmount();
-          walletBrickController = null;
-        } catch (e) {
-          console.warn("Error al desmontar MP:", e);
-        }
-      }
-
-      container.innerHTML =
-        '<span class="text-[9px] uppercase tracking-widest text-neutral-400">Sincronizando pago...</span>';
-      container.classList.add("animate-pulse", "bg-neutral-50");
-
-      try {
-        const response = await fetch("/api/checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: cart }),
-        });
-
-        const { id } = await response.json();
-
-        if (id) {
-          walletBrickController = await bricksBuilder.create(
-            "wallet",
-            "walletBrick_container",
-            {
-              initialization: { preferenceId: id, redirectMode: "modal" },
-              callbacks: {
-                onReady: () => {
-                  container.classList.remove("animate-pulse", "bg-neutral-50");
-                  container.innerHTML = "";
-                  isProcessingMP = false; // Abrimos el cerrojo
-                },
-                onError: (e: any) => {
-                  console.error(error);
-                  isProcessingMP = false;
-                },
-              },
-              customization: {
-                visual: { buttonBackground: "black", borderRadius: "0px" },
-              },
-            },
-          );
-        }
-      } catch (e: any) {
-        isProcessingMP = false;
-      }
-    }
-
-    function attachEventListeners() {
-      document.querySelectorAll(".qty-btn, .remove-item").forEach((el) => {
-        (el as HTMLElement).onclick = (e) => {
-          // Si MP está cargando, no dejamos que el usuario haga más cambios
-          if (isProcessingMP) return;
-
-          const target = e.currentTarget as HTMLElement;
-          const index = parseInt(target.dataset.index || "0");
-
-          if (target.classList.contains("remove-item")) {
-            removeItem(index);
-          } else {
-            updateQty(index, parseInt(target.dataset.change || "0"));
-          }
+      // Eventos corregidos para HTMLElement
+      document.querySelectorAll(".qty-btn").forEach((el) => {
+        (el as HTMLElement).onclick = (e: any) => {
+          const i = parseInt(e.target.dataset.index);
+          const c = parseInt(e.target.dataset.change);
+          const cartData = JSON.parse(localStorage.getItem("cart") || "[]");
+          cartData[i].quantity = Math.max(1, (cartData[i].quantity || 1) + c);
+          localStorage.setItem("cart", JSON.stringify(cartData));
+          renderCart();
         };
       });
-    }
 
-    function updateQty(index: number, change: number) {
-      let cart = JSON.parse(localStorage.getItem("cart") || "[]");
-      if (cart[index]) {
-        cart[index].quantity = Math.max(
-          1,
-          (cart[index].quantity || 1) + change,
-        );
-        localStorage.setItem("cart", JSON.stringify(cart));
-        renderCart();
-      }
-    }
+      document.querySelectorAll(".remove-item").forEach((el) => {
+        (el as HTMLElement).onclick = (e: any) => {
+          const i = parseInt(e.target.dataset.index);
+          const cartData = JSON.parse(localStorage.getItem("cart") || "[]");
+          cartData.splice(i, 1);
+          localStorage.setItem("cart", JSON.stringify(cartData));
+          renderCart();
+        };
+      });
 
-    function removeItem(index: number) {
-      let cart = JSON.parse(localStorage.getItem("cart") || "[]");
-      cart.splice(index, 1);
-      localStorage.setItem("cart", JSON.stringify(cart));
-      renderCart();
+      if (mpTimeout) clearTimeout(mpTimeout);
+      mpTimeout = setTimeout(() => handleMercadoPagoButton(cart), 800);
     }
 
     renderCart();
