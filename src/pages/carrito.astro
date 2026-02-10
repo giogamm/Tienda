@@ -148,6 +148,11 @@ import Navbar from "../components/Nav.astro";
       const container = document.getElementById("walletBrick_container");
       if (!container) return;
 
+      // LIMPIEZA VITAL: Borramos el botón viejo antes de crear el nuevo
+      container.innerHTML =
+        '<span class="text-[9px] uppercase tracking-widest text-neutral-400">Actualizando pago...</span>';
+      container.classList.add("animate-pulse", "bg-neutral-50");
+
       try {
         const response = await fetch("/api/checkout", {
           method: "POST",
@@ -165,7 +170,6 @@ import Navbar from "../components/Nav.astro";
             },
             callbacks: {
               onReady: () => {
-                // Eliminamos efectos de carga
                 container.classList.remove(
                   "animate-pulse",
                   "bg-neutral-50",
@@ -218,7 +222,7 @@ import Navbar from "../components/Nav.astro";
           (cart[index].quantity || 1) + change,
         );
         localStorage.setItem("cart", JSON.stringify(cart));
-        renderCart();
+        renderCart(); // Esto dispara handleMercadoPagoButton con el nuevo total
         window.dispatchEvent(new Event("cart-updated"));
       }
     }
@@ -227,7 +231,7 @@ import Navbar from "../components/Nav.astro";
       let cart = JSON.parse(localStorage.getItem("cart") || "[]");
       cart.splice(index, 1);
       localStorage.setItem("cart", JSON.stringify(cart));
-      renderCart();
+      renderCart(); // Esto recalcula todo y actualiza Mercado Pago
       window.dispatchEvent(new Event("cart-updated"));
     }
 
