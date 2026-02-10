@@ -2,19 +2,22 @@
 import Layout from "../layouts/Layout.astro";
 ---
 
-<Layout>
+<Layout title="¡Gracias por tu compra! | Jenndart Pop">
   <div
     class="flex flex-col items-center justify-center min-h-screen bg-[#f4e4bc] p-4 text-center"
   >
+    <div class="mb-6 text-6xl">✨</div>
+
     <h1 class="text-4xl font-bold text-[#5d4037] mb-4">
       ¡Mil gracias por tu compra!
     </h1>
-    <p class="text-lg text-[#795548] mb-8">
-      Tu pedido de Jenndart Pop está siendo preparado con mucho amor.
+    <p class="text-lg text-[#795548] mb-8 max-w-md">
+      Tu pedido de **Jenndart Pop** está siendo preparado con mucho amor. Pronto
+      recibirás noticias nuestras.
     </p>
     <a
       href="/"
-      class="bg-[#8d6e63] text-white px-6 py-2 rounded-full hover:bg-[#5d4037] transition"
+      class="bg-[#8d6e63] text-white px-8 py-3 rounded-full hover:bg-[#5d4037] transition-all transform hover:scale-105 shadow-md"
     >
       Volver a la tienda
     </a>
@@ -22,8 +25,18 @@ import Layout from "../layouts/Layout.astro";
 </Layout>
 
 <script>
-  // Limpiamos el carrito al cargar la página de confirmación
-  localStorage.removeItem("cart");
-  // Avisamos al sistema que el carrito cambió para que el contador de la Nav se actualice
-  window.dispatchEvent(new Event("cart-updated"));
+  const cleanSuccess = () => {
+    // 1. Limpiamos el carrito del almacenamiento local
+    localStorage.removeItem("cart");
+
+    // 2. Disparamos el evento para que la Navbar se entere y ponga el contador en 0
+    window.dispatchEvent(new Event("cart-updated"));
+
+  };
+
+  // Se ejecuta al cargar la página
+  cleanSuccess();
+
+  // Si usas View Transitions de Astro, esto asegura que funcione al navegar
+  document.addEventListener("astro:after-swap", cleanSuccess);
 </script>
