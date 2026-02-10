@@ -1,6 +1,10 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import Navbar from "../components/Nav.astro";
+
+// PayPal url porque se pone de niñita el astro y no deja usar variables de entorno directamente en el src del script
+const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
+const paypalUrl = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&currency=MXN`;
 ---
 
 <Layout title="Tu Carrito | Regalos Personalizados">
@@ -48,6 +52,8 @@ import Navbar from "../components/Nav.astro";
             >
           </div>
 
+          <div id="paypal-button-container"></div>
+
           <button
             id="checkout-whatsapp"
             class="w-full border border-neutral-900 text-neutral-900 py-5 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-50 transition-all active:scale-[0.98] cursor-pointer"
@@ -66,14 +72,13 @@ import Navbar from "../components/Nav.astro";
 </Layout>
 
 <script is:inline src="https://sdk.mercadopago.com/js/v2"></script>
+<script is:inline src={paypalUrl}></script>
 
 <script>
   const initCart = () => {
-    // Definimos tipos para que TypeScript no se queje
     let walletBrickController: any = null;
     let mpTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    // Elementos del DOM con su tipo correcto
     const itemsContainer = document.getElementById("cart-items");
     const emptyMessage = document.getElementById("cart-empty");
     const summary = document.getElementById("cart-summary");
@@ -88,12 +93,10 @@ import Navbar from "../components/Nav.astro";
 
     async function handleMercadoPagoButton(cart: any[]) {
       if (!mpContainer || cart.length === 0) return;
-
       if (walletBrickController) {
         await walletBrickController.unmount();
         walletBrickController = null;
       }
-
       mpContainer.innerHTML =
         '<span class="text-[9px] uppercase tracking-widest text-neutral-400 italic">Generando botón de pago...</span>';
       mpContainer.classList.add("animate-pulse", "bg-neutral-50");
@@ -104,10 +107,8 @@ import Navbar from "../components/Nav.astro";
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ items: cart }),
         });
-
         const { id } = await response.json();
         if (!id) throw new Error("No ID");
-
         walletBrickController = await bricksBuilder.create(
           "wallet",
           "walletBrick_container",
@@ -133,6 +134,51 @@ import Navbar from "../components/Nav.astro";
       }
     }
 
+    // --- LÓGICA DE PAYPAL ---
+    const renderPayPal = (cart: any[]) => {
+      const paypalContainer = document.getElementById(
+        "paypal-button-container",
+      );
+      if (!paypalContainer) return;
+      paypalContainer.innerHTML = ""; // Limpiar para evitar duplicados
+
+      // @ts-ignore
+      window.paypal
+        .Buttons({
+          style: {
+            layout: "vertical",
+            color: "black",
+            shape: "rect",
+            label: "paypal",
+            borderRadius: 0,
+          },
+          createOrder: async () => {
+            const res = await fetch("/api/paypal-checkout", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                items: cart.map((i) => ({ id: i.id, quantity: i.quantity })),
+              }),
+            });
+            const order = await res.json();
+            return order.id;
+          },
+          onApprove: async (data: any) => {
+            const res = await fetch("/api/paypal-capture", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderID: data.orderID }),
+            });
+            const details = await res.json();
+            if (details.status === "COMPLETED") {
+              localStorage.removeItem("cart");
+              window.location.href = "/success";
+            }
+          },
+        })
+        .render("#paypal-button-container");
+    };
+
     function renderCart() {
       const cart = JSON.parse(localStorage.getItem("cart") || "[]");
       if (!itemsContainer || !emptyMessage || !summary || !totalPriceEl) return;
@@ -149,13 +195,11 @@ import Navbar from "../components/Nav.astro";
 
       let total = 0;
       let html = "";
-
       cart.forEach((item: any, index: number) => {
         const price = Number(item.precio || item.price || 0);
         const qty = Number(item.quantity || 1);
         const subtotal = price * qty;
         total += subtotal;
-
         html += `
           <div class="flex items-start gap-4 py-6 border-b border-neutral-50 last:border-0">
             <div class="w-20 h-28 bg-neutral-50 flex-shrink-0">
@@ -164,9 +208,7 @@ import Navbar from "../components/Nav.astro";
             <div class="flex-1">
               <div class="flex justify-between items-start">
                 <h3 class="text-[11px] uppercase tracking-widest font-bold">${item.nombre}</h3>
-                <button class="remove-item text-neutral-300 hover:text-red-500 text-[9px] uppercase tracking-tighter" data-index="${index}">
-                   Eliminar
-                </button>
+                <button class="remove-item text-neutral-300 hover:text-red-500 text-[9px] uppercase tracking-tighter" data-index="${index}">Eliminar</button>
               </div>
               <div class="flex justify-between items-center mt-4">
                 <div class="flex items-center border border-neutral-200">
@@ -183,7 +225,7 @@ import Navbar from "../components/Nav.astro";
       itemsContainer.innerHTML = html;
       totalPriceEl.innerText = `$${total} MXN`;
 
-      // Eventos corregidos para HTMLElement
+      // Event Listeners
       document.querySelectorAll(".qty-btn").forEach((el) => {
         (el as HTMLElement).onclick = (e: any) => {
           const i = parseInt(e.target.dataset.index);
@@ -206,7 +248,10 @@ import Navbar from "../components/Nav.astro";
       });
 
       if (mpTimeout) clearTimeout(mpTimeout);
-      mpTimeout = setTimeout(() => handleMercadoPagoButton(cart), 800);
+      mpTimeout = setTimeout(() => {
+        handleMercadoPagoButton(cart);
+        renderPayPal(cart);
+      }, 800);
     }
 
     renderCart();
