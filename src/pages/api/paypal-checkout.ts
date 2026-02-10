@@ -17,10 +17,9 @@ export const POST: APIRoute = async ({ request }) => {
     const body = await request.json();
     const { items } = body;
 
-    // 1. Obtener Token de Acceso de PayPal
-    const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_SECRET}`).toString(
-      "base64",
-    );
+    // 1. Obtener Token de Acceso de PayPal (Usando btoa para máxima compatibilidad)
+    const auth = btoa(`${PAYPAL_CLIENT_ID}:${PAYPAL_SECRET}`);
+
     const tokenResponse = await fetch(
       "https://api-m.sandbox.paypal.com/v1/oauth2/token",
       {
@@ -33,9 +32,14 @@ export const POST: APIRoute = async ({ request }) => {
       },
     );
 
-    const { access_token } = await tokenResponse.json();
+    const tokenData = await tokenResponse.json();
+    const access_token = tokenData.access_token;
 
-    // 2. Calcular el total (Aquí es donde podrías consultar tu BD por ID)
+    if (!access_token) {
+      throw new Error("No se pudo obtener el token de acceso");
+    }
+
+    // 2. Calcular el total
     const totalAmount = items
       .reduce((acc: number, item: any) => {
         const price = Number(item.precio || item.price || 0);

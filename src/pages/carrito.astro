@@ -2,7 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import Navbar from "../components/Nav.astro";
 
-// Obtenemos el ID del .env para pasarlo al script de abajo
+// Obtenemos el ID del .env
 const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
 ---
 
@@ -68,20 +68,28 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       </div>
     </div>
   </main>
+
+  <div id="paypal-config-bridge" data-id={paypalClientId} class="hidden"></div>
 </Layout>
 
 <script is:inline src="https://sdk.mercadopago.com/js/v2"></script>
 
-<script is:inline define:vars={{ paypalClientId }}>
-  if (paypalClientId) {
-    const script = document.createElement("script");
-    script.src = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&currency=MXN`;
-    script.async = true;
-    script.onload = () => {
-      window.dispatchEvent(new Event("paypal-sdk-loaded"));
-    };
-    document.head.appendChild(script);
-  }
+<script is:inline>
+  (function () {
+    const bridge = document.getElementById("paypal-config-bridge");
+    const clientId = bridge ? bridge.getAttribute("data-id") : null;
+
+    if (clientId && clientId !== "undefined" && clientId !== "") {
+      const script = document.createElement("script");
+      script.src =
+        "https://www.paypal.com/sdk/js?client-id=" + clientId + "&currency=MXN";
+      script.async = true;
+      script.onload = () => {
+        window.dispatchEvent(new Event("paypal-sdk-loaded"));
+      };
+      document.head.appendChild(script);
+    }
+  })();
 </script>
 
 <script>
@@ -148,7 +156,6 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       const container = document.getElementById("paypal-button-container");
       // @ts-ignore
       if (!container || !window.paypal) return;
-
       container.innerHTML = "";
 
       // @ts-ignore
@@ -166,7 +173,11 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                items: cart.map((i) => ({ id: i.id, quantity: i.quantity })),
+                items: cart.map((i: any) => ({
+                  id: i.id,
+                  quantity: i.quantity,
+                  precio: i.precio,
+                })),
               }),
             });
             const order = await res.json();
@@ -262,7 +273,6 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         if (window.paypal) {
           renderPayPal(cart);
         } else {
-          // Si el SDK aún no carga, esperamos al evento
           window.addEventListener(
             "paypal-sdk-loaded",
             () => renderPayPal(cart),
