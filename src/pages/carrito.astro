@@ -40,9 +40,8 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         </div>
 
         <div class="flex flex-col gap-4 max-w-md mx-auto w-full">
-          <div id="walletBrick_container" class="w-full min-h-50px"></div>
-
-          <div id="paypal-button-container" class="w-full min-h-50px"></div>
+          <div id="walletBrick_container" class="w-full min-h-[50px]"></div>
+          <div id="paypal-button-container" class="w-full min-h-[50px]"></div>
 
           <button
             id="checkout-whatsapp"
@@ -67,19 +66,19 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
     const summary = document.getElementById("cart-summary");
     const totalPriceEl = document.getElementById("total-price");
 
-    // 1. RENDERIZADO BÁSICO DEL CARRITO (Esto tiene que funcionar sí o sí)
-    const cart = JSON.parse(localStorage.getItem("cart") || "[]");
+    let cart = JSON.parse(localStorage.getItem("cart") || "[]");
 
     if (cart.length === 0) {
-      itemsContainer!.innerHTML = "";
-      emptyMessage!.classList.remove("hidden");
-      summary!.classList.add("hidden");
+      if (itemsContainer) itemsContainer.innerHTML = "";
+      emptyMessage?.classList.remove("hidden");
+      summary?.classList.add("hidden");
       return;
     }
 
-    emptyMessage!.classList.add("hidden");
-    summary!.classList.remove("hidden");
+    emptyMessage?.classList.add("hidden");
+    summary?.classList.remove("hidden");
 
+    // RENDERIZADO DE PRODUCTOS CON BOTONES +/-
     let total = 0;
     itemsContainer!.innerHTML = cart
       .map((item: any, index: number) => {
@@ -92,11 +91,15 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
           <div class="flex-1">
             <div class="flex justify-between">
               <h3 class="text-[11px] uppercase font-bold">${item.nombre}</h3>
-              <button class="remove-item text-red-500 text-[9px]" data-index="${index}">Eliminar</button>
+              <button class="remove-item text-neutral-400 hover:text-red-500 text-[9px] uppercase tracking-tighter" data-index="${index}">Eliminar</button>
             </div>
             <div class="flex justify-between items-center mt-4">
-              <span class="text-[10px]">Cant: ${qty}</span>
-              <span class="font-serif italic">$${price * qty}</span>
+              <div class="flex items-center border border-neutral-200">
+                <button class="qty-btn px-2 py-1" data-index="${index}" data-change="-1">-</button>
+                <span class="px-3 text-[10px] font-bold">${qty}</span>
+                <button class="qty-btn px-2 py-1" data-index="${index}" data-change="1">+</button>
+              </div>
+              <span class="font-serif italic text-neutral-900">$${price * qty}</span>
             </div>
           </div>
         </div>`;
@@ -105,10 +108,9 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
 
     totalPriceEl!.innerText = `$${total} MXN`;
 
-    // 2. CARGA DE PAGOS (Separada para que no rompa el carrito)
-
-    // MERCADO PAGO
-    const loadMP = async () => {
+    // --- LÓGICA DE PAGOS (Encapsulada) ---
+    const loadPayments = async () => {
+      // Mercado Pago
       try {
         // @ts-ignore
         const mp = new window.MercadoPago(
@@ -122,6 +124,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         });
         const { id } = await res.json();
         if (id) {
+          document.getElementById("walletBrick_container")!.innerHTML = "";
           await mp.bricks().create("wallet", "walletBrick_container", {
             initialization: { preferenceId: id, redirectMode: "modal" },
             customization: {
@@ -130,71 +133,87 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
           });
         }
       } catch (e) {
-        console.error("MP Fail", e);
+        console.error("Error MP:", e);
+      }
+
+      // PayPal
+      try {
+        const clientId =
+          document.getElementById("paypal-id-bridge")?.dataset.id;
+        if (
+          clientId &&
+          clientId !== "undefined" &&
+          !document.getElementById("pp-script")
+        ) {
+          const script = document.createElement("script");
+          script.id = "pp-script";
+          script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=MXN`;
+          script.async = true;
+          script.onload = () => {
+            // @ts-ignore
+            window.paypal
+              .Buttons({
+                style: {
+                  layout: "vertical",
+                  color: "black",
+                  shape: "rect",
+                  height: 45,
+                  borderRadius: 0,
+                },
+                createOrder: async () => {
+                  const res = await fetch("/api/paypal-checkout", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ items: cart }),
+                  });
+                  const data = await res.json();
+                  return data.id;
+                },
+                onApprove: async (data: any) => {
+                  const res = await fetch("/api/paypal-capture", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ orderID: data.orderID }),
+                  });
+                  if (res.ok) {
+                    localStorage.removeItem("cart");
+                    window.location.href = "/success";
+                  }
+                },
+              })
+              .render("#paypal-button-container");
+          };
+          document.head.appendChild(script);
+        }
+      } catch (e) {
+        console.error("Error PP:", e);
       }
     };
 
-    // PAYPAL
-    const loadPP = () => {
-      const bridge = document.getElementById("paypal-id-bridge");
-      const clientId = bridge?.dataset.id;
-      if (!clientId || clientId === "undefined") return;
+    // Ejecutar carga de pagos
+    loadPayments();
 
-      const script = document.createElement("script");
-      script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=MXN`;
-      script.async = true;
-      script.onload = () => {
-        // @ts-ignore
-        window.paypal
-          .Buttons({
-            style: {
-              layout: "vertical",
-              color: "black",
-              shape: "rect",
-              height: 45,
-            },
-            createOrder: async () => {
-              const res = await fetch("/api/paypal-checkout", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ items: cart }),
-              });
-              const data = await res.json();
-              return data.id;
-            },
-            onApprove: async (data: any) => {
-              const res = await fetch("/api/paypal-capture", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ orderID: data.orderID }),
-              });
-              if (res.ok) {
-                localStorage.removeItem("cart");
-                window.location.href = "/success";
-              }
-            },
-          })
-          .render("#paypal-button-container");
+    // --- LISTENERS DE INTERACCIÓN ---
+    document.querySelectorAll(".qty-btn").forEach((btn) => {
+      (btn as HTMLElement).onclick = () => {
+        const idx = parseInt((btn as HTMLElement).dataset.index!);
+        const change = parseInt((btn as HTMLElement).dataset.change!);
+        cart[idx].quantity = Math.max(1, (cart[idx].quantity || 1) + change);
+        localStorage.setItem("cart", JSON.stringify(cart));
+        initCart(); // Recargar vista
       };
-      document.head.appendChild(script);
-    };
+    });
 
-    // Ejecutamos las cargas después de pintar el carrito
-    loadMP();
-    loadPP();
-
-    // Eventos de eliminar
     document.querySelectorAll(".remove-item").forEach((btn) => {
       (btn as HTMLElement).onclick = () => {
         const idx = parseInt((btn as HTMLElement).dataset.index!);
         cart.splice(idx, 1);
         localStorage.setItem("cart", JSON.stringify(cart));
-        initCart();
+        initCart(); // Recargar vista
       };
     });
   };
 
-  // Arrancar
   initCart();
   document.addEventListener("astro:after-swap", initCart);
 </script>
