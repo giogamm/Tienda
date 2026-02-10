@@ -22,9 +22,10 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         </p>
         <a
           href="/"
-          class="text-xs uppercase tracking-widest border-b border-neutral-900 pb-1 hover:text-neutral-500 transition-colors"
-          >Explorar Colección</a
+          class="text-[10px] uppercase tracking-[0.3em] border border-neutral-900 px-8 py-3 hover:bg-neutral-900 hover:text-white transition-all duration-300"
         >
+          Explorar Colección
+        </a>
       </div>
 
       <div
@@ -40,13 +41,17 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         </div>
 
         <div class="flex flex-col gap-4 max-w-md mx-auto w-full">
-          <div id="paypal-button-container" class="w-full min-h-50px"></div>
+          <div
+            id="paypal-button-container"
+            class="w-full min-h-[50px] paypal-style-fix"
+          >
+          </div>
 
-          <div id="walletBrick_container" class="w-full min-h-50px"></div>
+          <div id="walletBrick_container" class="w-full min-h-[50px]"></div>
 
           <button
             id="checkout-whatsapp"
-            class="w-full border border-neutral-900 text-neutral-900 py-4 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-50 transition-all cursor-pointer"
+            class="w-full border border-neutral-900 text-neutral-900 py-4 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-900 hover:text-white transition-all duration-300 cursor-pointer active:scale-[0.98]"
           >
             Finalizar por WhatsApp
           </button>
@@ -57,6 +62,14 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
 
   <div id="paypal-id-bridge" data-id={paypalClientId} class="hidden"></div>
 </Layout>
+
+<style>
+  /* Fix para que PayPal ocupe el 100% igual que los otros botones */
+  .paypal-style-fix {
+    display: block !important;
+    width: 100% !important;
+  }
+</style>
 
 <script is:inline src="https://sdk.mercadopago.com/js/v2"></script>
 
@@ -88,20 +101,25 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         const qty = Number(item.quantity || 1);
         total += price * qty;
         return `
-        <div class="flex items-start gap-4 py-6 border-b border-neutral-50 last:border-0">
-          <img src="${item.imagen}" class="w-20 h-28 object-cover bg-neutral-50" />
-          <div class="flex-1">
-            <div class="flex justify-between">
-              <h3 class="text-[11px] uppercase font-bold">${item.nombre}</h3>
-              <button class="remove-item text-neutral-400 hover:text-red-500 text-[9px] uppercase" data-index="${index}">Eliminar</button>
-            </div>
-            <div class="flex justify-between items-center mt-4">
-              <div class="flex items-center border border-neutral-200">
-                <button class="qty-btn px-2 py-1" data-index="${index}" data-change="-1">-</button>
-                <span class="px-3 text-[10px] font-bold">${qty}</span>
-                <button class="qty-btn px-2 py-1" data-index="${index}" data-change="1">+</button>
+        <div class="flex items-start gap-4 py-8 border-b border-neutral-50 last:border-0 animate-fade-in">
+          <div class="w-24 h-32 bg-neutral-50 overflow-hidden">
+             <img src="${item.imagen}" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+          </div>
+          <div class="flex-1 flex flex-col h-32 justify-between">
+            <div>
+              <div class="flex justify-between items-start">
+                <h3 class="text-[11px] uppercase tracking-widest font-bold text-neutral-900">${item.nombre}</h3>
+                <button class="remove-item text-neutral-300 hover:text-red-500 transition-colors text-[9px] uppercase tracking-tighter" data-index="${index}">Eliminar</button>
               </div>
-              <span class="font-serif italic text-neutral-900">$${price * qty}</span>
+            </div>
+            
+            <div class="flex justify-between items-end">
+              <div class="flex items-center border border-neutral-200 bg-white">
+                <button class="qty-btn px-3 py-1 text-neutral-400 hover:text-neutral-900 transition-colors" data-index="${index}" data-change="-1">-</button>
+                <span class="px-2 text-[10px] font-medium w-6 text-center">${qty}</span>
+                <button class="qty-btn px-3 py-1 text-neutral-400 hover:text-neutral-900 transition-colors" data-index="${index}" data-change="1">+</button>
+              </div>
+              <span class="font-serif italic text-lg text-neutral-900">$${price * qty}</span>
             </div>
           </div>
         </div>`;
@@ -110,9 +128,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
 
     totalPriceEl!.innerText = `$${total} MXN`;
 
-    // FUNCIÓN PARA RECARGAR LOS BOTONES DE PAGO CON EL NUEVO TOTAL
     const refreshPayments = async () => {
-      // Limpiar contenedores para evitar duplicados o montajes sobre botones viejos
       const ppCont = document.getElementById("paypal-button-container");
       const mpCont = document.getElementById("walletBrick_container");
       if (ppCont) ppCont.innerHTML = "";
@@ -130,7 +146,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
               layout: "vertical",
               color: "black",
               shape: "rect",
-              height: 45,
+              height: 50,
               borderRadius: 0,
             },
             createOrder: async () => {
@@ -187,7 +203,6 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       }
     };
 
-    // --- CARGA INICIAL DE SDK PAYPAL SI NO EXISTE ---
     const clientId = document.getElementById("paypal-id-bridge")?.dataset.id;
     if (
       clientId &&
@@ -196,7 +211,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
     ) {
       const script = document.createElement("script");
       script.id = "pp-script";
-      script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=MXN`;
+      script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=MXN&components=buttons`;
       script.async = true;
       script.onload = refreshPayments;
       document.head.appendChild(script);
@@ -204,7 +219,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       refreshPayments();
     }
 
-    // --- LISTENERS (ASIGNAR DE NUEVO TRAS CADA RENDER) ---
+    // EVENTOS
     document.querySelectorAll(".qty-btn").forEach((btn) => {
       (btn as HTMLElement).onclick = (e) => {
         const idx = parseInt((e.currentTarget as HTMLElement).dataset.index!);
