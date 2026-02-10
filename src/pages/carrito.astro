@@ -165,7 +165,7 @@ import Navbar from "../components/Nav.astro";
             },
             callbacks: {
               onReady: () => {
-                // Quitamos el skeleton cuando el botón está listo
+                // Eliminamos efectos de carga
                 container.classList.remove(
                   "animate-pulse",
                   "bg-neutral-50",
@@ -175,7 +175,7 @@ import Navbar from "../components/Nav.astro";
                 const text = container.querySelector("span");
                 if (text) text.remove();
               },
-              onError: (error) => console.error(error),
+              onError: (error: any) => console.error(error),
             },
             customization: {
               texts: { valueProp: "smart_option" },
@@ -186,7 +186,7 @@ import Navbar from "../components/Nav.astro";
             },
           });
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error("Error inicializando MP:", e);
       }
     }
