@@ -74,6 +74,9 @@ import Navbar from "../components/Nav.astro";
     const summary = document.getElementById("cart-summary");
     const totalPriceEl = document.getElementById("total-price");
 
+    // Variable para controlar la instancia del botón de Mercado Pago
+    let walletBrickController: any = null;
+
     // @ts-ignore
     const mp = new window.MercadoPago(import.meta.env.PUBLIC_MP_PUBLIC_KEY, {
       locale: "es-MX",
@@ -148,7 +151,13 @@ import Navbar from "../components/Nav.astro";
       const container = document.getElementById("walletBrick_container");
       if (!container) return;
 
-      // LIMPIEZA VITAL: Borramos el botón viejo antes de crear el nuevo
+      // 1. Desmontar el botón anterior si existe para evitar que se quede cargando
+      if (walletBrickController) {
+        walletBrickController.unmount();
+        walletBrickController = null;
+      }
+
+      // 2. Mostrar estado de carga
       container.innerHTML =
         '<span class="text-[9px] uppercase tracking-widest text-neutral-400">Actualizando pago...</span>';
       container.classList.add("animate-pulse", "bg-neutral-50");
@@ -163,32 +172,42 @@ import Navbar from "../components/Nav.astro";
         const { id } = await response.json();
 
         if (id) {
-          await bricksBuilder.create("wallet", "walletBrick_container", {
-            initialization: {
-              preferenceId: id,
-              redirectMode: "modal",
-            },
-            callbacks: {
-              onReady: () => {
-                container.classList.remove(
-                  "animate-pulse",
-                  "bg-neutral-50",
-                  "min-h-[60px]",
-                );
-                container.classList.add("min-h-0");
-                const text = container.querySelector("span");
-                if (text) text.remove();
+          // 3. Crear el nuevo botón y guardar su controlador
+          walletBrickController = await bricksBuilder.create(
+            "wallet",
+            "walletBrick_container",
+            {
+              initialization: {
+                preferenceId: id,
+                redirectMode: "modal",
               },
-              onError: (error: any) => console.error(error),
-            },
-            customization: {
-              texts: { valueProp: "smart_option" },
-              visual: {
-                buttonBackground: "black",
-                borderRadius: "0px",
+              callbacks: {
+                onReady: () => {
+                  // 4. Limpiar estilos de carga al estar listo
+                  container.classList.remove(
+                    "animate-pulse",
+                    "bg-neutral-50",
+                    "min-h-[60px]",
+                  );
+                  container.classList.add("min-h-0");
+                  const text = container.querySelector("span");
+                  if (text) text.remove();
+                },
+                onError: (error: any) => {
+                  console.error("Error MP:", error);
+                  container.innerHTML =
+                    '<span class="text-[10px] text-red-500">Error al cargar el pago</span>';
+                },
+              },
+              customization: {
+                texts: { valueProp: "smart_option" },
+                visual: {
+                  buttonBackground: "black",
+                  borderRadius: "0px",
+                },
               },
             },
-          });
+          );
         }
       } catch (e: any) {
         console.error("Error inicializando MP:", e);
@@ -222,7 +241,7 @@ import Navbar from "../components/Nav.astro";
           (cart[index].quantity || 1) + change,
         );
         localStorage.setItem("cart", JSON.stringify(cart));
-        renderCart(); // Esto dispara handleMercadoPagoButton con el nuevo total
+        renderCart();
         window.dispatchEvent(new Event("cart-updated"));
       }
     }
@@ -231,7 +250,7 @@ import Navbar from "../components/Nav.astro";
       let cart = JSON.parse(localStorage.getItem("cart") || "[]");
       cart.splice(index, 1);
       localStorage.setItem("cart", JSON.stringify(cart));
-      renderCart(); // Esto recalcula todo y actualiza Mercado Pago
+      renderCart();
       window.dispatchEvent(new Event("cart-updated"));
     }
 
