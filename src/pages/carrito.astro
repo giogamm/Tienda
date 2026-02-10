@@ -42,15 +42,15 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         <div class="flex flex-col gap-4 max-w-md mx-auto w-full">
           <div
             id="paypal-button-container"
-            class="w-full min-h-[50px] overflow-hidden"
+            class="w-full min-h-50px overflow-hidden"
           >
           </div>
 
-          <div id="walletBrick_container" class="w-full min-h-[50px]"></div>
+          <div id="walletBrick_container" class="w-full min-h-50px"></div>
 
           <button
             id="checkout-whatsapp"
-            class="w-full border border-neutral-900 text-neutral-900 py-4 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-50 transition-all cursor-pointer"
+            class="w-full border border-neutral-900 text-neutral-900 py-4 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-50 transition-all cursor-pointer active:scale-95"
           >
             Finalizar por WhatsApp
           </button>
@@ -66,6 +66,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
 
 <script>
   let walletBrickController: any = null;
+  let debounceTimer: any = null; // Temporizador para evitar errores por clics rápidos
 
   const initCart = () => {
     const itemsContainer = document.getElementById("cart-items");
@@ -118,13 +119,12 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       const ppCont = document.getElementById("paypal-button-container");
       const mpCont = document.getElementById("walletBrick_container");
 
-      // 1. Limpieza absoluta antes de generar nada
       if (ppCont) ppCont.innerHTML = "";
       if (mpCont)
         mpCont.innerHTML =
-          '<div class="animate-pulse bg-neutral-50 h-12 w-full"></div>';
+          '<div class="animate-pulse bg-neutral-50 h-12 w-full flex items-center justify-center"><span class="text-[9px] uppercase tracking-widest text-neutral-400">Actualizando...</span></div>';
 
-      // 2. PAYPAL
+      // 1. PAYPAL (Sincrónico)
       // @ts-ignore
       if (window.paypal) {
         // @ts-ignore
@@ -161,43 +161,44 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
           .render("#paypal-button-container");
       }
 
-      // 3. MERCADO PAGO (FIXED)
-      try {
-        // MUY IMPORTANTE: Desmontar y resetear variable ANTES de llamar al API
-        if (walletBrickController) {
-          await walletBrickController.unmount();
-          walletBrickController = null;
-        }
+      // 2. MERCADO PAGO (Con Debounce de 500ms)
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        try {
+          if (walletBrickController) {
+            await walletBrickController.unmount();
+            walletBrickController = null;
+          }
 
-        // @ts-ignore
-        const mp = new window.MercadoPago(
-          import.meta.env.PUBLIC_MP_PUBLIC_KEY,
-          { locale: "es-MX" },
-        );
-        const res = await fetch("/api/checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: cart }),
-        });
-        const { id } = await res.json();
+          // @ts-ignore
+          const mp = new window.MercadoPago(
+            import.meta.env.PUBLIC_MP_PUBLIC_KEY,
+            { locale: "es-MX" },
+          );
+          const res = await fetch("/api/checkout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ items: cart }),
+          });
+          const { id } = await res.json();
 
-        if (id && mpCont) {
-          mpCont.innerHTML = ""; // Limpiar el skeleton de carga
-          walletBrickController = await mp
-            .bricks()
-            .create("wallet", "walletBrick_container", {
-              initialization: { preferenceId: id, redirectMode: "modal" },
-              customization: {
-                visual: { buttonBackground: "black", borderRadius: "0" },
-              },
-            });
+          if (id && mpCont) {
+            mpCont.innerHTML = "";
+            walletBrickController = await mp
+              .bricks()
+              .create("wallet", "walletBrick_container", {
+                initialization: { preferenceId: id, redirectMode: "modal" },
+                customization: {
+                  visual: { buttonBackground: "black", borderRadius: "0" },
+                },
+              });
+          }
+        } catch (e) {
+          console.error("Error MP:", e);
         }
-      } catch (e) {
-        console.error("Error MP:", e);
-      }
+      }, 500); // Espera a que el usuario deje de picar botones
     };
 
-    // Carga de script de PayPal con FIX de región (locale=es_MX)
     const clientId = document.getElementById("paypal-id-bridge")?.dataset.id;
     if (
       clientId &&
@@ -214,7 +215,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       refreshPayments();
     }
 
-    // RE-ASIGNAR EVENTOS
+    // EVENTOS
     document.querySelectorAll(".qty-btn").forEach((btn) => {
       (btn as HTMLElement).onclick = (e) => {
         const idx = parseInt((e.currentTarget as HTMLElement).dataset.index!);
