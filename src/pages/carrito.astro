@@ -22,7 +22,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         </p>
         <a
           href="/"
-          class="text-[10px] uppercase tracking-[0.3em] border border-neutral-900 px-8 py-3 hover:bg-neutral-900 hover:text-white transition-all duration-300"
+          class="text-xs uppercase tracking-widest border-b border-neutral-900 pb-1 hover:text-neutral-500 transition-colors"
           >Explorar Colección</a
         >
       </div>
@@ -40,12 +40,17 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         </div>
 
         <div class="flex flex-col gap-4 max-w-md mx-auto w-full">
-          <div id="paypal-button-container" class="w-full min-h-50px"></div>
-          <div id="walletBrick_container" class="w-full min-h-50px"></div>
+          <div
+            id="paypal-button-container"
+            class="w-full min-h-[50px] overflow-hidden"
+          >
+          </div>
+
+          <div id="walletBrick_container" class="w-full min-h-[50px]"></div>
 
           <button
             id="checkout-whatsapp"
-            class="w-full border border-neutral-900 text-neutral-900 py-4 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-900 hover:text-white transition-all cursor-pointer"
+            class="w-full border border-neutral-900 text-neutral-900 py-4 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-50 transition-all cursor-pointer"
           >
             Finalizar por WhatsApp
           </button>
@@ -92,7 +97,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
           <div class="flex-1">
             <div class="flex justify-between items-start">
               <h3 class="text-[11px] uppercase font-bold tracking-widest">${item.nombre}</h3>
-              <button class="remove-item text-neutral-300 hover:text-red-500 text-[9px] uppercase" data-index="${index}">Eliminar</button>
+              <button class="remove-item text-neutral-300 hover:text-red-500 text-[9px] uppercase tracking-tighter" data-index="${index}">Eliminar</button>
             </div>
             <div class="flex justify-between items-end mt-10">
               <div class="flex items-center border border-neutral-200">
@@ -113,13 +118,13 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       const ppCont = document.getElementById("paypal-button-container");
       const mpCont = document.getElementById("walletBrick_container");
 
-      // LIMPIEZA TOTAL: Borramos el HTML antes de empezar
+      // 1. Limpieza absoluta antes de generar nada
       if (ppCont) ppCont.innerHTML = "";
       if (mpCont)
         mpCont.innerHTML =
           '<div class="animate-pulse bg-neutral-50 h-12 w-full"></div>';
 
-      // 1. PAYPAL (Con el nuevo total)
+      // 2. PAYPAL
       // @ts-ignore
       if (window.paypal) {
         // @ts-ignore
@@ -156,8 +161,9 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
           .render("#paypal-button-container");
       }
 
-      // 2. MERCADO PAGO (Con el nuevo total)
+      // 3. MERCADO PAGO (FIXED)
       try {
+        // MUY IMPORTANTE: Desmontar y resetear variable ANTES de llamar al API
         if (walletBrickController) {
           await walletBrickController.unmount();
           walletBrickController = null;
@@ -176,7 +182,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         const { id } = await res.json();
 
         if (id && mpCont) {
-          mpCont.innerHTML = ""; // Limpieza final antes de crear
+          mpCont.innerHTML = ""; // Limpiar el skeleton de carga
           walletBrickController = await mp
             .bricks()
             .create("wallet", "walletBrick_container", {
@@ -191,6 +197,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       }
     };
 
+    // Carga de script de PayPal con FIX de región (locale=es_MX)
     const clientId = document.getElementById("paypal-id-bridge")?.dataset.id;
     if (
       clientId &&
@@ -199,7 +206,6 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
     ) {
       const script = document.createElement("script");
       script.id = "pp-script";
-      // FIX PAYPAL: Añadimos locale=es_MX para forzar México por default
       script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=MXN&locale=es_MX`;
       script.async = true;
       script.onload = refreshPayments;
@@ -208,7 +214,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       refreshPayments();
     }
 
-    // REASIGNAR LISTENERS
+    // RE-ASIGNAR EVENTOS
     document.querySelectorAll(".qty-btn").forEach((btn) => {
       (btn as HTMLElement).onclick = (e) => {
         const idx = parseInt((e.currentTarget as HTMLElement).dataset.index!);
