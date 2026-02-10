@@ -2,7 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import Navbar from "../components/Nav.astro";
 
-// Obtenemos el ID del .env
+// Obtenemos el ID del .env para pasarlo al cliente
 const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
 ---
 
@@ -69,14 +69,14 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
     </div>
   </main>
 
-  <div id="paypal-config-bridge" data-id={paypalClientId} class="hidden"></div>
+  <div id="paypal-id-bridge" data-id={paypalClientId} class="hidden"></div>
 </Layout>
 
 <script is:inline src="https://sdk.mercadopago.com/js/v2"></script>
 
 <script is:inline>
   (function () {
-    const bridge = document.getElementById("paypal-config-bridge");
+    const bridge = document.getElementById("paypal-id-bridge");
     const clientId = bridge ? bridge.getAttribute("data-id") : null;
 
     if (clientId && clientId !== "undefined" && clientId !== "") {
@@ -85,9 +85,11 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         "https://www.paypal.com/sdk/js?client-id=" + clientId + "&currency=MXN";
       script.async = true;
       script.onload = () => {
-        window.dispatchEvent(new Event("paypal-sdk-loaded"));
+        window.dispatchEvent(new Event("paypal-sdk-ready"));
       };
       document.head.appendChild(script);
+    } else {
+      console.warn("PayPal Client ID no configurado en el servidor.");
     }
   })();
 </script>
@@ -95,7 +97,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
 <script>
   const initCart = () => {
     let walletBrickController: any = null;
-    let mpTimeout: ReturnType<typeof setTimeout> | null = null;
+    let updateTimeout: any = null;
 
     const itemsContainer = document.getElementById("cart-items");
     const emptyMessage = document.getElementById("cart-empty");
@@ -103,21 +105,18 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
     const totalPriceEl = document.getElementById("total-price");
     const mpContainer = document.getElementById("walletBrick_container");
 
+    // Mercado Pago Config
     // @ts-ignore
     const mp = new window.MercadoPago(import.meta.env.PUBLIC_MP_PUBLIC_KEY, {
       locale: "es-MX",
     });
-    const bricksBuilder = mp.bricks();
 
-    async function handleMercadoPagoButton(cart: any[]) {
+    async function handleMP(cart: any[]) {
       if (!mpContainer || cart.length === 0) return;
       if (walletBrickController) {
         await walletBrickController.unmount();
         walletBrickController = null;
       }
-      mpContainer.innerHTML =
-        '<span class="text-[9px] uppercase tracking-widest text-neutral-400 italic">Generando botón de pago...</span>';
-      mpContainer.classList.add("animate-pulse", "bg-neutral-50");
 
       try {
         const response = await fetch("/api/checkout", {
@@ -126,29 +125,23 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
           body: JSON.stringify({ items: cart }),
         });
         const { id } = await response.json();
-        if (!id) throw new Error("No ID");
-        walletBrickController = await bricksBuilder.create(
-          "wallet",
-          "walletBrick_container",
-          {
+        walletBrickController = await mp
+          .bricks()
+          .create("wallet", "walletBrick_container", {
             initialization: { preferenceId: id, redirectMode: "modal" },
             callbacks: {
               onReady: () => {
                 mpContainer.classList.remove("animate-pulse", "bg-neutral-50");
-                const text = mpContainer.querySelector("span");
-                if (text) text.remove();
+                mpContainer.innerHTML = "";
               },
               onError: (e: any) => console.error("Error MP:", e),
             },
             customization: {
               visual: { buttonBackground: "black", borderRadius: "0px" },
             },
-          },
-        );
-      } catch (e: any) {
-        console.error("Fallo al cargar botón:", e);
-        mpContainer.innerHTML =
-          '<button onclick="location.reload()" class="text-[9px] uppercase underline text-red-500">Error al cargar pago. Reintentar.</button>';
+          });
+      } catch (e) {
+        console.error(e);
       }
     }
 
@@ -216,10 +209,9 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       let total = 0;
       let html = "";
       cart.forEach((item: any, index: number) => {
-        const price = Number(item.precio || item.price || 0);
+        const price = Number(item.precio || 0);
         const qty = Number(item.quantity || 1);
-        const subtotal = price * qty;
-        total += subtotal;
+        total += price * qty;
         html += `
           <div class="flex items-start gap-4 py-6 border-b border-neutral-50 last:border-0">
             <div class="w-20 h-28 bg-neutral-50 flex-shrink-0">
@@ -228,7 +220,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
             <div class="flex-1">
               <div class="flex justify-between items-start">
                 <h3 class="text-[11px] uppercase tracking-widest font-bold">${item.nombre}</h3>
-                <button class="remove-item text-neutral-300 hover:text-red-500 text-[9px] uppercase tracking-tighter" data-index="${index}">Eliminar</button>
+                <button class="remove-item text-neutral-300 hover:text-red-500 text-[9px] uppercase" data-index="${index}">Eliminar</button>
               </div>
               <div class="flex justify-between items-center mt-4">
                 <div class="flex items-center border border-neutral-200">
@@ -236,7 +228,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
                   <span class="px-2 text-[10px] font-bold">${qty}</span>
                   <button class="qty-btn px-2 py-1" data-index="${index}" data-change="1">+</button>
                 </div>
-                <span class="font-serif italic text-neutral-900">$${subtotal}</span>
+                <span class="font-serif italic text-neutral-900">$${price * qty}</span>
               </div>
             </div>
           </div>`;
@@ -245,6 +237,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       itemsContainer.innerHTML = html;
       totalPriceEl.innerText = `$${total} MXN`;
 
+      // Listeners
       document.querySelectorAll(".qty-btn").forEach((el) => {
         (el as HTMLElement).onclick = (e: any) => {
           const i = parseInt(e.target.dataset.index);
@@ -266,20 +259,20 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         };
       });
 
-      if (mpTimeout) clearTimeout(mpTimeout);
-      mpTimeout = setTimeout(() => {
-        handleMercadoPagoButton(cart);
+      if (updateTimeout) clearTimeout(updateTimeout);
+      updateTimeout = setTimeout(() => {
+        handleMP(cart);
         // @ts-ignore
         if (window.paypal) {
           renderPayPal(cart);
         } else {
           window.addEventListener(
-            "paypal-sdk-loaded",
+            "paypal-sdk-ready",
             () => renderPayPal(cart),
             { once: true },
           );
         }
-      }, 800);
+      }, 600);
     }
 
     renderCart();
