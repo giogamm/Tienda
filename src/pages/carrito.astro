@@ -2,9 +2,8 @@
 import Layout from "../layouts/Layout.astro";
 import Navbar from "../components/Nav.astro";
 
-// PayPal url porque se pone de niñita el astro y no deja usar variables de entorno directamente en el src del script
+// Obtenemos el ID del .env para pasarlo al script de abajo
 const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
-const paypalUrl = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&currency=MXN`;
 ---
 
 <Layout title="Tu Carrito | Regalos Personalizados">
@@ -52,7 +51,7 @@ const paypalUrl = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&cur
             >
           </div>
 
-          <div id="paypal-button-container"></div>
+          <div id="paypal-button-container" class="min-h-50px"></div>
 
           <button
             id="checkout-whatsapp"
@@ -72,7 +71,18 @@ const paypalUrl = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&cur
 </Layout>
 
 <script is:inline src="https://sdk.mercadopago.com/js/v2"></script>
-<script is:inline src={paypalUrl}></script>
+
+<script is:inline define:vars={{ paypalClientId }}>
+  if (paypalClientId) {
+    const script = document.createElement("script");
+    script.src = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&currency=MXN`;
+    script.async = true;
+    script.onload = () => {
+      window.dispatchEvent(new Event("paypal-sdk-loaded"));
+    };
+    document.head.appendChild(script);
+  }
+</script>
 
 <script>
   const initCart = () => {
@@ -134,13 +144,12 @@ const paypalUrl = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&cur
       }
     }
 
-    // --- LÓGICA DE PAYPAL ---
     const renderPayPal = (cart: any[]) => {
-      const paypalContainer = document.getElementById(
-        "paypal-button-container",
-      );
-      if (!paypalContainer) return;
-      paypalContainer.innerHTML = ""; // Limpiar para evitar duplicados
+      const container = document.getElementById("paypal-button-container");
+      // @ts-ignore
+      if (!container || !window.paypal) return;
+
+      container.innerHTML = "";
 
       // @ts-ignore
       window.paypal
@@ -225,7 +234,6 @@ const paypalUrl = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&cur
       itemsContainer.innerHTML = html;
       totalPriceEl.innerText = `$${total} MXN`;
 
-      // Event Listeners
       document.querySelectorAll(".qty-btn").forEach((el) => {
         (el as HTMLElement).onclick = (e: any) => {
           const i = parseInt(e.target.dataset.index);
@@ -250,7 +258,17 @@ const paypalUrl = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&cur
       if (mpTimeout) clearTimeout(mpTimeout);
       mpTimeout = setTimeout(() => {
         handleMercadoPagoButton(cart);
-        renderPayPal(cart);
+        // @ts-ignore
+        if (window.paypal) {
+          renderPayPal(cart);
+        } else {
+          // Si el SDK aún no carga, esperamos al evento
+          window.addEventListener(
+            "paypal-sdk-loaded",
+            () => renderPayPal(cart),
+            { once: true },
+          );
+        }
       }, 800);
     }
 
