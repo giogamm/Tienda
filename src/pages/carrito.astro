@@ -44,18 +44,22 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         <div class="flex flex-col gap-4">
           <div
             id="walletBrick_container"
-            class="min-h-50px flex items-center justify-center bg-neutral-50 animate-pulse border border-neutral-100 transition-all duration-300"
+            class="min-h-50px w-full flex items-center justify-center bg-neutral-50 animate-pulse border border-neutral-100 transition-all duration-300"
           >
             <span class="text-[9px] uppercase tracking-widest text-neutral-400"
               >Preparando Mercado Pago...</span
             >
           </div>
 
-          <div id="paypal-button-container" class="min-h-50px w-full"></div>
+          <div
+            id="paypal-button-container"
+            class="w-full min-h-50px paypal-wrapper"
+          >
+          </div>
 
           <button
             id="checkout-whatsapp"
-            class="w-full border border-neutral-900 text-neutral-900 py-5 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-50 transition-all cursor-pointer"
+            class="w-full border border-neutral-900 text-neutral-900 py-4 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-50 transition-all cursor-pointer active:scale-[0.98]"
           >
             Finalizar pedido por WhatsApp
           </button>
@@ -71,6 +75,14 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
 
   <div id="paypal-id-bridge" data-id={paypalClientId} class="hidden"></div>
 </Layout>
+
+<style>
+  /* Forzamos a que el botón de PayPal use el 100% del ancho del contenedor */
+  .paypal-wrapper {
+    display: block !important;
+    width: 100% !important;
+  }
+</style>
 
 <script is:inline src="https://sdk.mercadopago.com/js/v2"></script>
 
@@ -160,7 +172,7 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
             color: "black",
             shape: "rect",
             label: "paypal",
-            height: 50,
+            height: 50, // Igualamos la altura a tus otros botones
             borderRadius: 0,
           },
           createOrder: async () => {
@@ -186,7 +198,6 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
             });
             const details = await res.json();
             if (details.status === "COMPLETED") {
-              // VACIAR LOCALSTORAGE SOLO AL COMPLETAR VENTA
               localStorage.removeItem("cart");
               window.location.href = "/success";
             }
@@ -265,7 +276,10 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       // Sincronización de botones de pago
       if (updateTimeout) clearTimeout(updateTimeout);
       updateTimeout = setTimeout(() => {
+        // Ejecutamos Mercado Pago
         handleMP(cart);
+
+        // Ejecutamos PayPal
         // @ts-ignore
         if (window.paypal) {
           renderPayPal(cart);
