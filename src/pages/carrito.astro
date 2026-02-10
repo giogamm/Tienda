@@ -74,10 +74,8 @@ import Navbar from "../components/Nav.astro";
     const summary = document.getElementById("cart-summary");
     const totalPriceEl = document.getElementById("total-price");
 
-    // Variables de control de estado
     let walletBrickController: any = null;
     let isUpdating = false;
-    let updateTimeout: any = null;
 
     // @ts-ignore
     const mp = new window.MercadoPago(import.meta.env.PUBLIC_MP_PUBLIC_KEY, {
@@ -112,7 +110,7 @@ import Navbar from "../components/Nav.astro";
           p.fotos && Array.isArray(p.fotos) && p.fotos.length > 0;
 
         html += `
-          <div class="flex items-start gap-4 py-6 border-b border-neutral-50 last:border-0 ${isUpdating ? "opacity-50 pointer-events-none" : ""}">
+          <div class="flex items-start gap-4 py-6 border-b border-neutral-50 last:border-0">
             <div class="w-20 h-28 bg-neutral-50 flex-shrink-0">
               <img src="${item.imagen}" class="w-full h-full object-cover" onerror="this.src='/placeholder.jpg'"/>
             </div>
@@ -143,26 +141,27 @@ import Navbar from "../components/Nav.astro";
       totalPriceEl.innerText = `$${total} MXN`;
       attachEventListeners();
 
-      // Debounce: Esperamos 500ms tras el último clic antes de llamar a MP
-      clearTimeout(updateTimeout);
-      updateTimeout = setTimeout(() => {
-        handleMercadoPagoButton(cart);
-      }, 500);
+      // Llamada directa sin demoras
+      handleMercadoPagoButton(cart);
     }
 
     async function handleMercadoPagoButton(cart: any[]) {
       const container = document.getElementById("walletBrick_container");
-      if (!container) return;
+      if (!container || isUpdating) return;
 
+      isUpdating = true;
+
+      // Limpieza rápida
       if (walletBrickController) {
-        await walletBrickController.unmount();
+        try {
+          await walletBrickController.unmount();
+        } catch (e) {}
         walletBrickController = null;
       }
 
       container.innerHTML =
-        '<span class="text-[9px] uppercase tracking-widest text-neutral-400">Validando orden...</span>';
+        '<span class="text-[9px] uppercase tracking-widest text-neutral-400">Preparando pago seguro...</span>';
       container.classList.add("animate-pulse", "bg-neutral-50");
-      isUpdating = true;
 
       try {
         const response = await fetch("/api/checkout", {
@@ -172,6 +171,7 @@ import Navbar from "../components/Nav.astro";
         });
 
         const { id } = await response.json();
+
         if (id) {
           walletBrickController = await bricksBuilder.create(
             "wallet",
@@ -180,13 +180,9 @@ import Navbar from "../components/Nav.astro";
               initialization: { preferenceId: id, redirectMode: "modal" },
               callbacks: {
                 onReady: () => {
-                  container.classList.remove(
-                    "animate-pulse",
-                    "bg-neutral-50",
-                    "min-h-[60px]",
-                  );
-                  container.classList.add("min-h-0");
-                  container.innerHTML = "";
+                  container.classList.remove("animate-pulse", "bg-neutral-50");
+                  const text = container.querySelector("span");
+                  if (text) text.remove();
                   isUpdating = false;
                 },
                 onError: (e: any) => {
@@ -210,20 +206,18 @@ import Navbar from "../components/Nav.astro";
     function attachEventListeners() {
       document.querySelectorAll(".qty-btn").forEach((el) => {
         (el as HTMLElement).onclick = (e) => {
-          if (isUpdating) return;
           const target = e.currentTarget as HTMLElement;
-          const idx = parseInt(target.dataset.index || "0");
-          const change = parseInt(target.dataset.change || "0");
-          updateQty(idx, change);
+          updateQty(
+            parseInt(target.dataset.index || "0"),
+            parseInt(target.dataset.change || "0"),
+          );
         };
       });
 
       document.querySelectorAll(".remove-item").forEach((el) => {
         (el as HTMLElement).onclick = (e) => {
-          if (isUpdating) return;
           const target = e.currentTarget as HTMLElement;
-          const idx = parseInt(target.dataset.index || "0");
-          removeItem(idx);
+          removeItem(parseInt(target.dataset.index || "0"));
         };
       });
     }
@@ -237,7 +231,6 @@ import Navbar from "../components/Nav.astro";
         );
         localStorage.setItem("cart", JSON.stringify(cart));
         renderCart();
-        window.dispatchEvent(new Event("cart-updated"));
       }
     }
 
@@ -246,23 +239,17 @@ import Navbar from "../components/Nav.astro";
       cart.splice(index, 1);
       localStorage.setItem("cart", JSON.stringify(cart));
       renderCart();
-      window.dispatchEvent(new Event("cart-updated"));
     }
 
     const whatsappBtn = document.getElementById("checkout-whatsapp");
     if (whatsappBtn) {
       whatsappBtn.onclick = () => {
         const cart = JSON.parse(localStorage.getItem("cart") || "[]");
-        let msg = "¡Hola! Me gustaría realizar un pedido personalizado:\n\n";
-        cart.forEach((item: any, i: number) => {
-          msg += `*${i + 1}. ${item.nombre}* (x${item.quantity})\n`;
-          if (item.personalizacion?.texto)
-            msg += `   - Grabado: "${item.personalizacion.texto}"\n`;
-          if (item.personalizacion?.fotos?.length > 0)
-            msg += `   - Fotos: ${item.personalizacion.fotos.length} archivo(s)\n`;
-          msg += `   - Precio: $${Number(item.precio || item.price) * item.quantity} MXN\n\n`;
-        });
-        msg += `*TOTAL ESTIMADO: ${totalPriceEl?.innerText}*`;
+        let msg = "¡Hola! Pedido Jenndart Pop:\n";
+        cart.forEach(
+          (item: any) => (msg += `- ${item.nombre} (x${item.quantity})\n`),
+        );
+        msg += `Total: ${totalPriceEl?.innerText}`;
         window.open(
           `https://wa.me/527551202205?text=${encodeURIComponent(msg)}`,
           "_blank",
