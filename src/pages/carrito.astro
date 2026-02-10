@@ -75,7 +75,7 @@ import Navbar from "../components/Nav.astro";
     const totalPriceEl = document.getElementById("total-price");
 
     let walletBrickController: any = null;
-    let isUpdating = false;
+    let isProcessingMP = false; // El cerrojo
 
     // @ts-ignore
     const mp = new window.MercadoPago(import.meta.env.PUBLIC_MP_PUBLIC_KEY, {
@@ -88,6 +88,11 @@ import Navbar from "../components/Nav.astro";
       if (!itemsContainer || !emptyMessage || !summary || !totalPriceEl) return;
 
       if (cart.length === 0) {
+        // Si el carrito se vacía, matamos cualquier rastro de MP
+        if (walletBrickController) {
+          walletBrickController.unmount();
+          walletBrickController = null;
+        }
         itemsContainer.innerHTML = "";
         emptyMessage.classList.remove("hidden");
         summary.classList.add("hidden");
@@ -105,12 +110,9 @@ import Navbar from "../components/Nav.astro";
         const qty = Number(item.quantity || 1);
         const subtotal = price * qty;
         total += subtotal;
-        const p = item.personalizacion || {};
-        const tieneFotos =
-          p.fotos && Array.isArray(p.fotos) && p.fotos.length > 0;
 
         html += `
-          <div class="flex items-start gap-4 py-6 border-b border-neutral-50 last:border-0">
+          <div class="flex items-start gap-4 py-6 border-b border-neutral-50 last:border-0 transition-opacity duration-200">
             <div class="w-20 h-28 bg-neutral-50 flex-shrink-0">
               <img src="${item.imagen}" class="w-full h-full object-cover" onerror="this.src='/placeholder.jpg'"/>
             </div>
@@ -120,10 +122,6 @@ import Navbar from "../components/Nav.astro";
                 <button class="remove-item text-neutral-300 hover:text-red-500 p-1 cursor-pointer" data-index="${index}">
                   <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="1.5"/></svg>
                 </button>
-              </div>
-              <div class="mt-2 space-y-2">
-                ${p.texto ? `<div class="bg-neutral-50 p-2 border-l border-neutral-300"><p class="text-[8px] uppercase tracking-widest text-neutral-400 mb-0.5">Grabado:</p><p class="text-[10px] italic text-neutral-600">"${p.texto}"</p></div>` : ""}
-                ${tieneFotos ? `<div class="flex items-center gap-1"><p class="text-[9px] text-neutral-400 uppercase tracking-widest">📷 ${p.fotos.length} fotos seleccionadas</p></div>` : ""}
               </div>
               <div class="flex justify-between items-center mt-4">
                 <div class="flex items-center border border-neutral-200">
@@ -141,26 +139,30 @@ import Navbar from "../components/Nav.astro";
       totalPriceEl.innerText = `$${total} MXN`;
       attachEventListeners();
 
-      // Llamada directa sin demoras
+      // Solo disparamos MP si no hay una actualización en curso
       handleMercadoPagoButton(cart);
     }
 
     async function handleMercadoPagoButton(cart: any[]) {
       const container = document.getElementById("walletBrick_container");
-      if (!container || isUpdating) return;
+      if (!container || cart.length === 0) return;
 
-      isUpdating = true;
+      // Si ya está trabajando, esperamos.
+      if (isProcessingMP) return;
+      isProcessingMP = true;
 
-      // Limpieza rápida
+      // Limpieza profunda del controlador anterior
       if (walletBrickController) {
         try {
           await walletBrickController.unmount();
-        } catch (e) {}
-        walletBrickController = null;
+          walletBrickController = null;
+        } catch (e) {
+          console.warn("Error al desmontar MP:", e);
+        }
       }
 
       container.innerHTML =
-        '<span class="text-[9px] uppercase tracking-widest text-neutral-400">Preparando pago seguro...</span>';
+        '<span class="text-[9px] uppercase tracking-widest text-neutral-400">Sincronizando pago...</span>';
       container.classList.add("animate-pulse", "bg-neutral-50");
 
       try {
@@ -181,43 +183,39 @@ import Navbar from "../components/Nav.astro";
               callbacks: {
                 onReady: () => {
                   container.classList.remove("animate-pulse", "bg-neutral-50");
-                  const text = container.querySelector("span");
-                  if (text) text.remove();
-                  isUpdating = false;
+                  container.innerHTML = "";
+                  isProcessingMP = false; // Abrimos el cerrojo
                 },
                 onError: (e: any) => {
-                  console.error(e);
-                  isUpdating = false;
+                  console.error(error);
+                  isProcessingMP = false;
                 },
               },
               customization: {
-                texts: { valueProp: "smart_option" },
                 visual: { buttonBackground: "black", borderRadius: "0px" },
               },
             },
           );
         }
       } catch (e: any) {
-        console.error("Error MP:", e);
-        isUpdating = false;
+        isProcessingMP = false;
       }
     }
 
     function attachEventListeners() {
-      document.querySelectorAll(".qty-btn").forEach((el) => {
+      document.querySelectorAll(".qty-btn, .remove-item").forEach((el) => {
         (el as HTMLElement).onclick = (e) => {
-          const target = e.currentTarget as HTMLElement;
-          updateQty(
-            parseInt(target.dataset.index || "0"),
-            parseInt(target.dataset.change || "0"),
-          );
-        };
-      });
+          // Si MP está cargando, no dejamos que el usuario haga más cambios
+          if (isProcessingMP) return;
 
-      document.querySelectorAll(".remove-item").forEach((el) => {
-        (el as HTMLElement).onclick = (e) => {
           const target = e.currentTarget as HTMLElement;
-          removeItem(parseInt(target.dataset.index || "0"));
+          const index = parseInt(target.dataset.index || "0");
+
+          if (target.classList.contains("remove-item")) {
+            removeItem(index);
+          } else {
+            updateQty(index, parseInt(target.dataset.change || "0"));
+          }
         };
       });
     }
@@ -239,22 +237,6 @@ import Navbar from "../components/Nav.astro";
       cart.splice(index, 1);
       localStorage.setItem("cart", JSON.stringify(cart));
       renderCart();
-    }
-
-    const whatsappBtn = document.getElementById("checkout-whatsapp");
-    if (whatsappBtn) {
-      whatsappBtn.onclick = () => {
-        const cart = JSON.parse(localStorage.getItem("cart") || "[]");
-        let msg = "¡Hola! Pedido Jenndart Pop:\n";
-        cart.forEach(
-          (item: any) => (msg += `- ${item.nombre} (x${item.quantity})\n`),
-        );
-        msg += `Total: ${totalPriceEl?.innerText}`;
-        window.open(
-          `https://wa.me/527551202205?text=${encodeURIComponent(msg)}`,
-          "_blank",
-        );
-      };
     }
 
     renderCart();
