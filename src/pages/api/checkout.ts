@@ -34,7 +34,7 @@ export const POST: APIRoute = async ({ request }) => {
         })),
         back_urls: {
           success: "https://jenndartpop.netlify.app/success",
-          failure: "https://jenndartpop.netlify.app/cart",
+          failure: "https://jenndartpop.netlify.app/carrito",
           pending: "https://jenndartpop.netlify.app/pending",
         },
         auto_return: "approved",

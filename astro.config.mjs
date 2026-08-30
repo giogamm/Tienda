@@ -11,7 +11,11 @@ export default defineConfig({
     plugins: [tailwindcss()],
     ssr: {
       // Esto obliga a Astro a empaquetar mercadopago correctamente para Netlify
-      noExternal: ["mercadopago"],
+      external: ["mercadopago"],
+      noExternal: [],
+    },
+    optimizeDeps: {
+      include: ["mercadopago"],
     },
   },
 

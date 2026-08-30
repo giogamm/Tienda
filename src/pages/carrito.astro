@@ -3,6 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import Navbar from "../components/Nav.astro";
 
 const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
+const mpPublicKey = import.meta.env.PUBLIC_MP_PUBLIC_KEY;
 ---
 
 <Layout title="Tu Carrito | Jenndart Pop">
@@ -20,89 +21,162 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
         <p class="text-neutral-400 uppercase tracking-widest text-sm mb-8">
           Tu carrito está vacío
         </p>
-        <a
-          href="/"
-          class="text-xs uppercase tracking-widest border-b border-neutral-900 pb-1 hover:text-neutral-500 transition-colors"
-          >Explorar Colección</a
+
+        href="/" class="text-xs uppercase tracking-widest border-b
+        border-neutral-900 pb-1 hover:text-neutral-500 transition-colors"
+        >Explorar Colección
+      </div>
+    </div>
+
+    <div
+      id="cart-summary"
+      class="mt-16 pt-8 border-t border-neutral-100 hidden"
+    >
+      <div class="flex justify-between items-center mb-10">
+        <span class="text-xs uppercase tracking-[0.2em] text-neutral-500"
+          >Total estimado</span
         >
+        <span id="total-price" class="text-2xl font-serif italic">$0 MXN</span>
       </div>
 
-      <div
-        id="cart-summary"
-        class="mt-16 pt-8 border-t border-neutral-100 hidden"
-      >
-        <div class="flex justify-between items-center mb-10">
-          <span class="text-xs uppercase tracking-[0.2em] text-neutral-500"
-            >Total estimado</span
-          >
-          <span id="total-price" class="text-2xl font-serif italic">$0 MXN</span
-          >
+      <div class="flex flex-col gap-4 max-w-md mx-auto w-full">
+        <div
+          id="paypal-button-container"
+          class="w-full min-h-[50px] overflow-hidden"
+        >
         </div>
-
-        <div class="flex flex-col gap-4 max-w-md mx-auto w-full">
-          <div
-            id="paypal-button-container"
-            class="w-full min-h-50px overflow-hidden"
-          >
-          </div>
-          <div id="walletBrick_container" class="w-full min-h-50px"></div>
-          <button
-            id="checkout-whatsapp"
-            class="w-full border border-neutral-900 text-neutral-900 py-4 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-50 transition-all cursor-pointer"
-          >
-            Finalizar por WhatsApp
-          </button>
-        </div>
+        <div id="walletBrick_container" class="w-full min-h-[50px]"></div>
+        <button
+          id="checkout-whatsapp"
+          class="w-full border border-neutral-900 text-neutral-900 py-4 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-50 transition-all cursor-pointer"
+        >
+          Finalizar por WhatsApp
+        </button>
       </div>
     </div>
   </main>
-
-  <div id="paypal-id-bridge" data-id={paypalClientId} class="hidden"></div>
 </Layout>
 
-<script is:inline src="https://sdk.mercadopago.com/js/v2"></script>
+<div
+  id="payment-bridge"
+  data-paypal-id={paypalClientId}
+  data-mp-key={mpPublicKey}
+  class="hidden"
+>
+</div>
 
 <script>
-  let walletBrickController: any = null;
-  let isProcessing = false; // Estado de bloqueo
+  type CartItem = {
+    nombre: string;
+    precio: number;
+    imagen: string;
+    quantity: number;
+    [key: string]: any;
+  };
 
-  const initCart = () => {
+  // Estas variables viven en el closure del módulo. Con ClientRouter el
+  // <script> normalmente NO se re-ejecuta al revisitar /carrito (Astro
+  // deduplica scripts idénticos), así que este estado persiste de forma
+  // segura entre navegaciones — es justo lo que necesitamos para saber
+  // si hay un botón/brick montado que haya que cerrar antes de crear otro.
+  let walletBrickController: any = null;
+  let paypalButtonsInstance: any = null;
+  let isUpdating = false;
+  let generation = 0;
+
+  // ---------------------------------------------------------------
+  // Fix de "window.MercadoPago is not a constructor":
+  // Antes, loadScript resolvía apenas veía el <script id> en el DOM,
+  // SIN esperar a que su evento `load` disparara. Si dos llamadas se
+  // solapaban (doble click rápido en +/-), la segunda seguía de largo
+  // creyendo que el SDK ya estaba listo. Ahora cacheamos la promesa
+  // real de carga, no solo la presencia del tag.
+  // ---------------------------------------------------------------
+  const scriptPromises = new Map<string, Promise<void>>();
+
+  const loadScript = (id: string, src: string): Promise<void> => {
+    const cached = scriptPromises.get(id);
+    if (cached) return cached;
+
+    const promise = new Promise<void>((resolve, reject) => {
+      const existing = document.getElementById(id) as
+        (HTMLScriptElement & { _loaded?: boolean }) | null;
+
+      if (existing) {
+        if (existing._loaded) {
+          resolve();
+        } else {
+          existing.addEventListener("load", () => resolve());
+          existing.addEventListener("error", () =>
+            reject(new Error(`Failed to load ${src}`)),
+          );
+        }
+        return;
+      }
+
+      const script = document.createElement("script") as HTMLScriptElement & {
+        _loaded?: boolean;
+      };
+      script.id = id;
+      script.src = src;
+      script.async = true;
+      script.onload = () => {
+        script._loaded = true;
+        resolve();
+      };
+      script.onerror = () => reject(new Error(`Failed to load ${src}`));
+      document.head.appendChild(script);
+    });
+
+    scriptPromises.set(id, promise);
+    return promise;
+  };
+
+  const getCart = (): CartItem[] => {
+    try {
+      return JSON.parse(localStorage.getItem("cart") || "[]");
+    } catch {
+      return [];
+    }
+  };
+
+  const renderCartUI = (cart: CartItem[]) => {
     const itemsContainer = document.getElementById("cart-items");
     const emptyMessage = document.getElementById("cart-empty");
     const summary = document.getElementById("cart-summary");
     const totalPriceEl = document.getElementById("total-price");
 
-    let cart = JSON.parse(localStorage.getItem("cart") || "[]");
+    if (!itemsContainer || !emptyMessage || !summary) return;
 
     if (cart.length === 0) {
-      if (itemsContainer) itemsContainer.innerHTML = "";
-      emptyMessage?.classList.remove("hidden");
-      summary?.classList.add("hidden");
+      itemsContainer.innerHTML = "";
+      emptyMessage.classList.remove("hidden");
+      summary.classList.add("hidden");
       return;
     }
 
-    emptyMessage?.classList.add("hidden");
-    summary?.classList.remove("hidden");
+    emptyMessage.classList.add("hidden");
+    summary.classList.remove("hidden");
 
     let total = 0;
-    itemsContainer!.innerHTML = cart
-      .map((item: any, index: number) => {
+    itemsContainer.innerHTML = cart
+      .map((item, index) => {
         const price = Number(item.precio || 0);
         const qty = Number(item.quantity || 1);
         total += price * qty;
         return `
-        <div class="flex items-start gap-4 py-8 border-b border-neutral-50 last:border-0 transition-opacity duration-300 ${isProcessing ? "opacity-50 pointer-events-none" : ""}">
+        <div class="flex items-start gap-4 py-8 border-b border-neutral-50 last:border-0">
           <img src="${item.imagen}" class="w-24 h-32 object-cover bg-neutral-50" />
           <div class="flex-1">
             <div class="flex justify-between items-start">
               <h3 class="text-[11px] uppercase font-bold tracking-widest">${item.nombre}</h3>
-              <button class="remove-item text-neutral-300 hover:text-red-500 text-[9px] uppercase tracking-tighter disabled:cursor-not-allowed" data-index="${index}" ${isProcessing ? "disabled" : ""}>Eliminar</button>
+              <button class="remove-item text-neutral-300 hover:text-red-500 text-[9px] uppercase tracking-tighter" data-index="${index}">Eliminar</button>
             </div>
             <div class="flex justify-between items-end mt-10">
               <div class="flex items-center border border-neutral-200">
-                <button class="qty-btn px-3 py-1 disabled:opacity-30" data-index="${index}" data-change="-1" ${isProcessing ? "disabled" : ""}>-</button>
+                <button class="qty-btn px-3 py-1" data-index="${index}" data-change="-1">-</button>
                 <span class="px-2 text-[10px] font-bold w-6 text-center">${qty}</span>
-                <button class="qty-btn px-3 py-1 disabled:opacity-30" data-index="${index}" data-change="1" ${isProcessing ? "disabled" : ""}>+</button>
+                <button class="qty-btn px-3 py-1" data-index="${index}" data-change="1">+</button>
               </div>
               <span class="font-serif italic text-neutral-900">$${price * qty}</span>
             </div>
@@ -111,145 +185,320 @@ const paypalClientId = import.meta.env.PUBLIC_PAYPAL_CLIENT_ID;
       })
       .join("");
 
-    totalPriceEl!.innerText = `$${total} MXN`;
-
-    const refreshPayments = async () => {
-      const ppCont = document.getElementById("paypal-button-container");
-      const mpCont = document.getElementById("walletBrick_container");
-
-      if (ppCont) ppCont.innerHTML = "";
-      if (mpCont)
-        mpCont.innerHTML =
-          '<div class="animate-pulse bg-neutral-50 h-12 w-full flex items-center justify-center"><span class="text-[9px] text-neutral-400">Actualizando...</span></div>';
-
-      // 1. PAYPAL
-      // @ts-ignore
-      if (window.paypal) {
-        // @ts-ignore
-        window.paypal
-          .Buttons({
-            style: {
-              layout: "vertical",
-              color: "black",
-              shape: "rect",
-              height: 50,
-              borderRadius: 0,
-            },
-            createOrder: async () => {
-              const res = await fetch("/api/paypal-checkout", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ items: cart }),
-              });
-              const data = await res.json();
-              return data.id;
-            },
-            onApprove: async (data: any) => {
-              const res = await fetch("/api/paypal-capture", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ orderID: data.orderID }),
-              });
-              if (res.ok) {
-                localStorage.removeItem("cart");
-                window.location.href = "/success";
-              }
-            },
-          })
-          .render("#paypal-button-container");
-      }
-
-      // 2. MERCADO PAGO
-      try {
-        if (walletBrickController) {
-          await walletBrickController.unmount();
-          walletBrickController = null;
-        }
-
-        // @ts-ignore
-        const mp = new window.MercadoPago(
-          import.meta.env.PUBLIC_MP_PUBLIC_KEY,
-          { locale: "es-MX" },
-        );
-        const res = await fetch("/api/checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: cart }),
-        });
-        const { id } = await res.json();
-
-        if (id && mpCont) {
-          mpCont.innerHTML = "";
-          walletBrickController = await mp
-            .bricks()
-            .create("wallet", "walletBrick_container", {
-              initialization: { preferenceId: id, redirectMode: "modal" },
-              customization: {
-                visual: { buttonBackground: "black", borderRadius: "0" },
-              },
-            });
-        }
-      } catch (e) {
-        console.error("Error MP:", e);
-      }
-
-      // LIBERAR BLOQUEO
-      isProcessing = false;
-      initCart(); // Re-renderizamos para quitar las clases de bloqueo
-    };
-
-    const clientId = document.getElementById("paypal-id-bridge")?.dataset.id;
-    if (
-      clientId &&
-      clientId !== "undefined" &&
-      !document.getElementById("pp-script")
-    ) {
-      const script = document.createElement("script");
-      script.id = "pp-script";
-      script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=MXN&locale=es_MX`;
-      script.async = true;
-      script.onload = refreshPayments;
-      document.head.appendChild(script);
-    } else {
-      if (!isProcessing) {
-        // Si no estamos cargando el script por primera vez, no bloqueamos aquí,
-        // el bloqueo ocurre en los eventos de clic abajo.
-      }
+    if (totalPriceEl) {
+      totalPriceEl.innerText = `$${total} MXN`;
     }
 
-    // EVENTOS CON BLOQUEO
-    document.querySelectorAll(".qty-btn").forEach((btn) => {
-      (btn as HTMLElement).onclick = (e) => {
-        if (isProcessing) return; // Evita doble clic
-        isProcessing = true; // Bloquea todo
+    attachItemListeners();
+  };
 
+  // ---------------------------------------------------------------
+  // PAYPAL — se monta UNA sola vez mientras el carrito tenga items.
+  // `createOrder` ya lee getCart() en el momento del click, así que
+  // NO hace falta destruir/recrear el botón en cada cambio de
+  // cantidad. Esto es lo que elimina el error de zoid: antes se
+  // borraba el contenedor (ppCont.innerHTML = "") en cada
+  // actualización sin llamar a buttons.close() primero.
+  // ---------------------------------------------------------------
+  const closePaypalButtons = async () => {
+    if (!paypalButtonsInstance) return;
+    try {
+      await paypalButtonsInstance.close();
+    } catch (e) {
+      console.debug("PayPal buttons ya estaban destruidos:", e);
+    }
+    paypalButtonsInstance = null;
+  };
+
+  const renderPaypalGateway = async (gen: number) => {
+    const bridge = document.getElementById(
+      "payment-bridge",
+    ) as HTMLElement | null;
+    const ppCont = document.getElementById("paypal-button-container");
+    if (!bridge || !ppCont) return;
+
+    // Ya está montado y sigue vivo en el DOM: no tocar nada.
+    if (paypalButtonsInstance && ppCont.childElementCount > 0) return;
+
+    const paypalClientId = bridge.dataset.paypalId;
+    if (!paypalClientId || paypalClientId === "undefined") return;
+
+    try {
+      await loadScript(
+        "pp-script",
+        `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&currency=MXN&locale=es_MX`,
+      );
+    } catch (e) {
+      console.error("Error cargando SDK de PayPal:", e);
+      return;
+    }
+
+    if (gen !== generation) return; // el usuario navegó mientras cargaba el SDK
+    // @ts-ignore
+    if (!window.paypal) return;
+
+    await closePaypalButtons();
+    if (gen !== generation) return;
+
+    const freshCont = document.getElementById("paypal-button-container");
+    if (!freshCont) return; // guarda contra "Cannot set properties of null"
+
+    // @ts-ignore
+    const buttons = window.paypal.Buttons({
+      style: {
+        layout: "vertical",
+        color: "black",
+        shape: "rect",
+        height: 50,
+        borderRadius: 0,
+      },
+      createOrder: async () => {
+        const res = await fetch("/api/paypal-checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: getCart() }),
+        });
+        if (!res.ok) throw new Error("No se pudo crear la orden de PayPal");
+        const data = await res.json();
+        return data.id;
+      },
+      onApprove: async (data: any) => {
+        const res = await fetch("/api/paypal-capture", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderID: data.orderID }),
+        });
+        if (res.ok) {
+          localStorage.removeItem("cart");
+          window.location.href = "/success";
+        }
+      },
+    });
+
+    if (gen !== generation) return;
+    try {
+      if (buttons.isEligible && !buttons.isEligible()) return;
+    } catch {
+      // algunas versiones del SDK no exponen isEligible; seguimos normal
+    }
+
+    try {
+      await buttons.render(freshCont);
+      if (gen === generation) {
+        paypalButtonsInstance = buttons;
+      } else {
+        // Navegó a mitad del render: cerramos para no dejar un iframe huérfano.
+        try {
+          await buttons.close();
+        } catch {}
+      }
+    } catch (e) {
+      if (gen === generation) console.error("Error PayPal:", e);
+    }
+  };
+
+  // ---------------------------------------------------------------
+  // MERCADO PAGO — sí se desmonta y recrea en cada cambio de carrito,
+  // porque el Wallet Brick queda atado a un preferenceId con el monto
+  // fijo (a diferencia de PayPal, aquí no hay forma de leer el total
+  // al momento del click). Siempre await unmount() antes de crear otro.
+  // ---------------------------------------------------------------
+  const unmountWalletBrick = async () => {
+    if (!walletBrickController) return;
+    try {
+      await walletBrickController.unmount();
+    } catch (e) {
+      console.debug("Wallet Brick ya estaba desmontado:", e);
+    }
+    walletBrickController = null;
+  };
+
+  const renderMercadoPagoGateway = async (gen: number) => {
+    const bridge = document.getElementById(
+      "payment-bridge",
+    ) as HTMLElement | null;
+    const mpCont = document.getElementById("walletBrick_container");
+    if (!bridge || !mpCont) return;
+
+    const mpPublicKey = bridge.dataset.mpKey;
+    if (!mpPublicKey || mpPublicKey === "undefined") return;
+
+    const cart = getCart();
+    if (cart.length === 0) {
+      await unmountWalletBrick();
+      if (document.getElementById("walletBrick_container"))
+        mpCont.innerHTML = "";
+      return;
+    }
+
+    mpCont.innerHTML =
+      '<div class="animate-pulse bg-neutral-50 h-12 w-full flex items-center justify-center"><span class="text-[9px] text-neutral-400">Cargando pagos...</span></div>';
+
+    try {
+      await loadScript("mp-sdk", "https://sdk.mercadopago.com/js/v2");
+    } catch (e) {
+      console.error("Error cargando SDK de Mercado Pago:", e);
+      if (document.getElementById("walletBrick_container"))
+        mpCont.innerHTML = "";
+      return;
+    }
+
+    if (gen !== generation) return;
+    // @ts-ignore
+    if (typeof window.MercadoPago !== "function") return;
+
+    let preferenceId: string | undefined;
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: cart }),
+      });
+      if (!res.ok) throw new Error("No se pudo crear la preferencia");
+      const data = await res.json();
+      preferenceId = data.id;
+    } catch (e) {
+      console.error("Error creando preferencia MP:", e);
+      if (
+        gen === generation &&
+        document.getElementById("walletBrick_container")
+      ) {
+        mpCont.innerHTML = "";
+      }
+      return;
+    }
+
+    if (gen !== generation || !preferenceId) return;
+
+    await unmountWalletBrick();
+    if (gen !== generation) return;
+
+    const freshCont = document.getElementById("walletBrick_container");
+    if (!freshCont) return; // guarda contra "Cannot set properties of null"
+
+    freshCont.innerHTML = "";
+
+    try {
+      // @ts-ignore
+      const mp = new window.MercadoPago(mpPublicKey, { locale: "es-MX" });
+      const controller = await mp
+        .bricks()
+        .create("wallet", "walletBrick_container", {
+          initialization: { preferenceId, redirectMode: "modal" },
+          // Para Wallet Brick el schema válido es theme + customStyle
+          // (NO customization.visual — eso es del Card Payment Brick).
+          // theme: 'dark' controla el fondo del botón; borderRadius va
+          // con unidad ("6px"), no como número ni como "0" pelado.
+          customization: {
+            theme: "dark",
+            customStyle: {
+              borderRadius: "6px",
+            },
+          },
+        });
+
+      if (gen === generation) {
+        walletBrickController = controller;
+      } else {
+        try {
+          await controller.unmount();
+        } catch {}
+      }
+    } catch (e) {
+      if (gen === generation) console.error("Error MP:", e);
+    }
+  };
+
+  const renderPaymentGateways = async (gen: number) => {
+    await Promise.all([
+      renderPaypalGateway(gen),
+      renderMercadoPagoGateway(gen),
+    ]);
+  };
+
+  const updateCartAndPayments = async () => {
+    if (isUpdating) return;
+    isUpdating = true;
+    generation += 1;
+    const gen = generation;
+    const cart = getCart();
+    renderCartUI(cart);
+    await renderPaymentGateways(gen);
+    isUpdating = false;
+  };
+
+  const attachItemListeners = () => {
+    document.querySelectorAll(".qty-btn").forEach((btn) => {
+      (btn as HTMLElement).onclick = async (e) => {
+        if (isUpdating) return;
+        const cart = getCart();
         const idx = parseInt((e.currentTarget as HTMLElement).dataset.index!);
         const change = parseInt(
           (e.currentTarget as HTMLElement).dataset.change!,
         );
         cart[idx].quantity = Math.max(1, (cart[idx].quantity || 1) + change);
         localStorage.setItem("cart", JSON.stringify(cart));
-
-        initCart(); // Renderiza visualmente el bloqueo
-        refreshPayments(); // Actualiza pasarelas
+        await updateCartAndPayments();
       };
     });
 
     document.querySelectorAll(".remove-item").forEach((btn) => {
-      (btn as HTMLElement).onclick = (e) => {
-        if (isProcessing) return;
-        isProcessing = true;
-
+      (btn as HTMLElement).onclick = async (e) => {
+        if (isUpdating) return;
+        const cart = getCart();
         const idx = parseInt((e.currentTarget as HTMLElement).dataset.index!);
         cart.splice(idx, 1);
         localStorage.setItem("cart", JSON.stringify(cart));
-
-        initCart();
-        refreshPayments();
+        await updateCartAndPayments();
       };
     });
   };
 
-  initCart();
-  document.addEventListener("astro:after-swap", initCart);
+  const initPage = () => {
+    if (!document.getElementById("cart-container")) return;
+    updateCartAndPayments();
+  };
+
+  // Al salir de /carrito (ClientRouter) cerramos todo de forma limpia.
+  // Se dispara desde el "loader" de astro:before-preparation (ver abajo),
+  // que sí bloquea la navegación hasta que este async termine — a
+  // diferencia de astro:before-swap, que NO se espera y por eso Astro
+  // hacía el swap del DOM en paralelo con el cierre de los SDKs.
+  const cleanupPage = async () => {
+    generation += 1; // invalida cualquier callback async en curso
+    await Promise.all([closePaypalButtons(), unmountWalletBrick()]);
+  };
+
+  const initWhatsappButton = () => {
+    const btn = document.getElementById("checkout-whatsapp");
+    if (!btn || (btn as any)._wired) return;
+    (btn as any)._wired = true;
+
+    btn.addEventListener("click", () => {
+      const cart = getCart();
+      if (cart.length === 0) return;
+      const lines = cart.map((i) => `• ${i.nombre} x${i.quantity}`).join("%0A");
+      const phone = "521XXXXXXXXXX"; // TODO: reemplaza con tu número real (formato 52 + 10 dígitos)
+      const url = `https://wa.me/${phone}?text=${encodeURIComponent("Hola, quiero comprar:")}%0A${lines}`;
+      window.open(url, "_blank");
+    });
+  };
+
+  document.addEventListener("astro:page-load", () => {
+    initPage();
+    initWhatsappButton();
+  });
+
+  // FIX: astro:before-swap no espera código async, así que Astro seguía
+  // con el swap del DOM mientras cleanupPage() todavía estaba cerrando
+  // los SDKs de pago (zoid "destroyed all components" / "Cannot set
+  // properties of null"). astro:before-preparation con un loader
+  // envuelto sí bloquea la navegación hasta que cleanupPage() termine.
+  document.addEventListener("astro:before-preparation", (event) => {
+    const originalLoader = event.loader;
+    event.loader = async () => {
+      await cleanupPage();
+      await originalLoader();
+    };
+  });
 </script>
