@@ -1,46 +1,37 @@
-# Astro Starter Kit: Basics
+# 🛍️ Jenndart Pop — E-commerce & Plataforma de Productos Personalizados
 
-```sh
-pnpm create astro@latest -- --template basics
-```
+Plataforma de comercio electrónico moderna, rápida y adaptable diseñada para la venta y personalización de productos. Incluye gestión completa de carrito en cliente, persistencia de datos y pasarelas de pago reales integradas mediante endpoints de backend.
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+🔗 **Demo en vivo:** [jenndartpop.netlify.app](https://jenndartpop.netlify.app)
 
-## 🚀 Project Structure
+---
 
-Inside of your Astro project, you'll see the following folders and files:
+## 🚀 Características Principales
 
-```text
-/
-├── public/
-│   └── favicon.svg
-├── src
-│   ├── assets
-│   │   └── astro.svg
-│   ├── components
-│   │   └── Welcome.astro
-│   ├── layouts
-│   │   └── Layout.astro
-│   └── pages
-│       └── index.astro
-└── package.json
-```
+* **Catálogo interactivo:** Navegación optimizada y vistas de producto de alto rendimiento.
+* **Carrito de compras persistente:** Gestión de estado y sincronización local en el navegador (`localStorage`).
+* **Pasarelas de pago integradas:**
+  * **Mercado Pago (Wallet Brick API):** Procesamiento de pagos con tarjeta de crédito/débito y saldo.
+  * **PayPal SDK:** Creación y captura de órdenes en tiempo real con soporte multimoneda (MXN).
+  * **Checkout asistido:** Canal directo de cierre de pedido vía WhatsApp.
+* **Rendimiento:** Arquitectura basada en islas de componentes para carga ultrarrápida y mínimo bundle de JavaScript.
+* **Diseño Responsivo:** Interfaz adaptada a móviles, tablets y escritorio con Tailwind CSS.
 
-To learn more about the folder structure of an Astro project, refer to [our guide on project structure](https://docs.astro.build/en/basics/project-structure/).
+---
 
-## 🧞 Commands
+## 🛠️ Stack Tecnológico
 
-All commands are run from the root of the project, from a terminal:
+* **Frontend:** [Astro](https://astro.build/) + TypeScript / JavaScript
+* **Estilos:** [Tailwind CSS](https://tailwindcss.com/)
+* **APIs / Backend:** Endpoints en Astro (Server Endpoints) para creación de preferencias y captura de cobros
+* **Integraciones:** Mercado Pago SDK v2, PayPal JS SDK, WhatsApp API
+* **Despliegue:** [Netlify](https://www.netlify.com/)
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `pnpm install`             | Installs dependencies                            |
-| `pnpm dev`             | Starts local dev server at `localhost:4321`      |
-| `pnpm build`           | Build your production site to `./dist/`          |
-| `pnpm preview`         | Preview your build locally, before deploying     |
-| `pnpm astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `pnpm astro -- --help` | Get help using the Astro CLI                     |
+---
 
-## 👀 Want to learn more?
+## 📦 Instalación y Configuración Local
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+1. **Clonar el repositorio:**
+   ```bash
+   git clone [https://github.com/TU_USUARIO/portfolio-gio.git](https://github.com/TU_USUARIO/portfolio-gio.git)
+   cd portfolio-gio
