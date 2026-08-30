@@ -28,10 +28,3 @@ Plataforma de comercio electrónico moderna, rápida y adaptable diseñada para 
 * **Despliegue:** [Netlify](https://www.netlify.com/)
 
 ---
-
-## 📦 Instalación y Configuración Local
-
-1. **Clonar el repositorio:**
-   ```bash
-   git clone [https://github.com/TU_USUARIO/portfolio-gio.git](https://github.com/TU_USUARIO/portfolio-gio.git)
-   cd portfolio-gio
