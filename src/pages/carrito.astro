@@ -42,10 +42,10 @@ const mpPublicKey = import.meta.env.PUBLIC_MP_PUBLIC_KEY;
       <div class="flex flex-col gap-4 max-w-md mx-auto w-full">
         <div
           id="paypal-button-container"
-          class="w-full min-h-[50px] overflow-hidden"
+          class="w-full min-h-12.5 overflow-hidden isolate"
         >
         </div>
-        <div id="walletBrick_container" class="w-full min-h-[50px]"></div>
+        <div id="walletBrick_container" class="w-full min-h-12.5"></div>
         <button
           id="checkout-whatsapp"
           class="w-full border border-neutral-900 text-neutral-900 py-4 text-[11px] uppercase tracking-[0.3em] hover:bg-neutral-50 transition-all cursor-pointer"
@@ -384,7 +384,7 @@ const mpPublicKey = import.meta.env.PUBLIC_MP_PUBLIC_KEY;
       const controller = await mp
         .bricks()
         .create("wallet", "walletBrick_container", {
-          initialization: { preferenceId, redirectMode: "modal" },
+          initialization: { preferenceId, redirectMode: "self" },
           // Para Wallet Brick el schema válido es theme + customStyle
           // (NO customization.visual — eso es del Card Payment Brick).
           // theme: 'dark' controla el fondo del botón; borderRadius va
